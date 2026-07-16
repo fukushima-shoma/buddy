@@ -21,9 +21,12 @@
 
 ## Current Phase
 
-Phase0: 開発環境構築
+Phase1: 車を動かす
 
-詳細手順: [docs/phase0.md](docs/phase0.md)
+詳細手順:
+
+- [docs/phase0.md](docs/phase0.md)
+- [docs/phase1.md](docs/phase1.md)
 
 ## Phase0 Checklist
 
@@ -38,6 +41,15 @@ Phase0: 開発環境構築
 - [x] Raspberry PiでPythonを実行する
 - [x] プロジェクト構成を作成する
 - [x] READMEを整備する
+
+## Phase1 Policy
+
+最初の車体は、2輪駆動 + キャスターで作る。
+
+- 左右2つのDCモーターを独立制御する
+- モータードライバはTB6612FNG系を使う
+- Raspberry Pi本体とモーターの電源は分ける
+- まずは前進、後退、左旋回、右旋回、停止だけを作る
 
 ## Project Layout
 
