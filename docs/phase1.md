@@ -286,6 +286,21 @@ python3 robot/motor_cli.py stop
 - 速度を低速に制限できる
 - 異常時に停止できる
 
+キーボードで連続操作する場合:
+
+```sh
+python3 -m robot.keyboard_cli --backend gpiozero
+```
+
+- `W`: 前進
+- `A`: 左旋回
+- `S`: 後退
+- `D`: 右旋回
+- `Space`: 停止
+- `Q`: 停止して終了
+
+移動キーの入力が0.5秒途切れた場合も自動停止する。走行中はキーを押し続ける。
+
 ## Phase1 Done Checklist
 
 | 項目 | 状態 |
