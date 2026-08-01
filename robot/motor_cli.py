@@ -31,6 +31,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds to run before stopping. Ignored for stop. Default: 0.5.",
     )
     parser.add_argument(
+        "--left-scale",
+        type=float,
+        default=1.0,
+        help="Left motor calibration factor from 0.0 to 1.0. Default: 1.0.",
+    )
+    parser.add_argument(
+        "--right-scale",
+        type=float,
+        default=1.0,
+        help="Right motor calibration factor from 0.0 to 1.0. Default: 1.0.",
+    )
+    parser.add_argument(
         "--backend",
         choices=("mock", "gpiozero"),
         default="mock",
@@ -52,7 +64,12 @@ def create_driver(backend: str) -> MotorDriver:
 def main() -> int:
     args = build_parser().parse_args()
     driver = create_driver(args.backend)
-    drive = BuddyDrive(driver, max_speed=args.max_speed)
+    drive = BuddyDrive(
+        driver,
+        max_speed=args.max_speed,
+        left_scale=args.left_scale,
+        right_scale=args.right_scale,
+    )
 
     try:
         if args.command == "stop":

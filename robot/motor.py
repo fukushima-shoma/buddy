@@ -33,9 +33,17 @@ class MotorCommand:
 class BuddyDrive:
     """High-level 2WD drive controller."""
 
-    def __init__(self, driver: MotorDriver, max_speed: float = 0.35) -> None:
+    def __init__(
+        self,
+        driver: MotorDriver,
+        max_speed: float = 0.35,
+        left_scale: float = 1.0,
+        right_scale: float = 1.0,
+    ) -> None:
         self.driver = driver
         self.max_speed = _clamp(max_speed, MIN_SPEED, MAX_SPEED)
+        self.left_scale = _clamp(left_scale, MIN_SPEED, MAX_SPEED)
+        self.right_scale = _clamp(right_scale, MIN_SPEED, MAX_SPEED)
 
     def forward(self, speed: float | None = None) -> MotorCommand:
         value = self._speed(speed)
@@ -66,7 +74,10 @@ class BuddyDrive:
         return _clamp(speed, MIN_SPEED, self.max_speed)
 
     def _apply(self, left: float, right: float) -> MotorCommand:
-        command = MotorCommand(left, right)
+        command = MotorCommand(
+            left=_clamp(left * self.left_scale, -MAX_SPEED, MAX_SPEED),
+            right=_clamp(right * self.right_scale, -MAX_SPEED, MAX_SPEED),
+        )
         self.driver.set_left(command.left)
         self.driver.set_right(command.right)
         return command
