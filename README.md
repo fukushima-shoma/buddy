@@ -21,12 +21,13 @@
 
 ## Current Phase
 
-Phase1: 車を動かす
+Phase2: カメラ搭載
 
 詳細手順:
 
 - [docs/phase0.md](docs/phase0.md)
 - [docs/phase1.md](docs/phase1.md)
+- [docs/phase2.md](docs/phase2.md)
 
 ## Phase0 Checklist
 
