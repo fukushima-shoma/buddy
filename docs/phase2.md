@@ -71,6 +71,34 @@ scp pi@buddy.local:~/buddy/captures/latest.jpg .
 - ケーブルがタイヤ、モーター、ファンに接触しないよう固定する。
 - カメラ基板の裏面が金属や裸の端子へ触れないようにする。
 
+## Step 5: OpenCVで色を検出
+
+Raspberry Pi OSのパッケージからOpenCVを導入する。
+
+```sh
+sudo apt update
+sudo apt install -y python3-opencv opencv-data
+```
+
+赤い物体を含む静止画を撮影する。
+
+```sh
+python3 -m robot.camera_cli \
+  --backend picamera2 \
+  --output captures/latest.jpg
+```
+
+画像内で最も大きな赤い領域を検出する。
+
+```sh
+python3 -m robot.color_cli \
+  --input captures/latest.jpg \
+  --color red \
+  --output captures/color-detected.jpg
+```
+
+`detected=true`なら、物体の位置が`left`、`center`、`right`のいずれかで表示される。緑と青は`--color green`または`--color blue`で試せる。
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意
