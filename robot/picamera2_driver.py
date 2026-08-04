@@ -34,7 +34,11 @@ class Picamera2Device:
 
 
 class Picamera2FrameSource:
-    """Continuous BGR frame source for OpenCV processing."""
+    """Continuous BGR frame source for OpenCV processing.
+
+    Picamera2's RGB888 name is counter-intuitive: captured Python arrays are
+    ordered B, G, R, which is the order OpenCV expects.
+    """
 
     def __init__(self, width: int = 640, height: int = 480) -> None:
         try:
@@ -50,7 +54,7 @@ class Picamera2FrameSource:
         configuration = self._camera.create_video_configuration(
             main={
                 "size": (max(1, width), max(1, height)),
-                "format": "BGR888",
+                "format": "RGB888",
             }
         )
         self._camera.configure(configuration)
