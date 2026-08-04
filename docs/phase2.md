@@ -99,6 +99,18 @@ python3 -m robot.color_cli \
 
 `detected=true`なら、物体の位置が`left`、`center`、`right`のいずれかで表示される。緑と青は`--color green`または`--color blue`で試せる。
 
+## Step 6: リアルタイム色認識
+
+モーターを動かさず、15秒間だけカメラ映像内の赤い物体を追跡する。
+
+```sh
+python3 -m robot.live_color_cli --color red
+```
+
+端末には`left`、`center`、`right`、`not-found`が表示される。最後に処理したフレームは`captures/live-color.jpg`へ保存される。
+
+物体をカメラの左右へゆっくり動かし、位置表示が変わることを確認する。途中で止める場合は`Ctrl+C`を押す。時間制限なしで実行する場合は`--duration 0`を指定する。
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意

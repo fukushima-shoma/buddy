@@ -50,23 +50,33 @@ def detect_largest_color(
     color: str,
     min_area: float = 1000.0,
 ) -> ColorDetection | None:
-    try:
-        import cv2
-        import numpy as np
-    except ImportError as exc:
-        raise RuntimeError(
-            "OpenCV is required. Install it with: "
-            "sudo apt install -y python3-opencv opencv-data"
-        ) from exc
-
-    ranges = HSV_RANGES.get(color)
-    if ranges is None:
-        raise ValueError(f"Unsupported color: {color}")
+    cv2, _ = _opencv()
 
     image = cv2.imread(str(input_path))
     if image is None:
         raise RuntimeError(f"Could not read image: {input_path}")
 
+    detection, annotated = detect_color_frame(image, color, min_area=min_area)
+
+    output_path = output_path.expanduser()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not cv2.imwrite(str(output_path), annotated):
+        raise RuntimeError(f"Could not write image: {output_path}")
+
+    return detection
+
+
+def detect_color_frame(
+    image: Any,
+    color: str,
+    min_area: float = 1000.0,
+) -> tuple[ColorDetection | None, Any]:
+    cv2, np = _opencv()
+    ranges = HSV_RANGES.get(color)
+    if ranges is None:
+        raise ValueError(f"Unsupported color: {color}")
+
+    annotated = image.copy()
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask: Any = None
     for hsv_range in ranges:
@@ -101,10 +111,12 @@ def detect_largest_color(
                 height=height,
                 position=horizontal_position(center_x, image.shape[1]),
             )
-            cv2.rectangle(image, (x, y), (x + width, y + height), (0, 255, 255), 3)
-            cv2.circle(image, (center_x, center_y), 6, (255, 255, 255), -1)
+            cv2.rectangle(
+                annotated, (x, y), (x + width, y + height), (0, 255, 255), 3
+            )
+            cv2.circle(annotated, (center_x, center_y), 6, (255, 255, 255), -1)
             cv2.putText(
-                image,
+                annotated,
                 f"{color} {detection.position} area={area:.0f}",
                 (x, max(30, y - 10)),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -113,9 +125,16 @@ def detect_largest_color(
                 2,
             )
 
-    output_path = output_path.expanduser()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    if not cv2.imwrite(str(output_path), image):
-        raise RuntimeError(f"Could not write image: {output_path}")
+    return detection, annotated
 
-    return detection
+
+def _opencv() -> tuple[Any, Any]:
+    try:
+        import cv2
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError(
+            "OpenCV is required. Install it with: "
+            "sudo apt install -y python3-opencv opencv-data"
+        ) from exc
+    return cv2, np
