@@ -26,10 +26,10 @@ class BuddyDriveTest(unittest.TestCase):
         left = self.drive.left(0.3)
         right = self.drive.right(0.3)
 
-        self.assertEqual(left.left, -0.3)
-        self.assertEqual(left.right, 0.3)
-        self.assertEqual(right.left, 0.3)
-        self.assertEqual(right.right, -0.3)
+        self.assertEqual(left.left, 0.3)
+        self.assertEqual(left.right, -0.3)
+        self.assertEqual(right.left, -0.3)
+        self.assertEqual(right.right, 0.3)
 
     def test_speed_is_limited_by_max_speed(self) -> None:
         command = self.drive.forward(1.0)

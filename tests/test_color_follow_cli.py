@@ -38,7 +38,7 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertEqual((driver.left_speed, driver.right_speed), (1.0, 1.0))
 
         apply_tracking_action(drive, "left", 1.0, 0.8)
-        self.assertEqual((driver.left_speed, driver.right_speed), (-0.8, 0.8))
+        self.assertEqual((driver.left_speed, driver.right_speed), (0.8, -0.8))
 
         apply_tracking_action(drive, "stop", 1.0, 1.0)
         self.assertEqual((driver.left_speed, driver.right_speed), (0.0, 0.0))

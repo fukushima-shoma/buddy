@@ -55,11 +55,11 @@ class BuddyDrive:
 
     def left(self, speed: float | None = None) -> MotorCommand:
         value = self._speed(speed)
-        return self._apply(-value, value)
+        return self._apply(value, -value)
 
     def right(self, speed: float | None = None) -> MotorCommand:
         value = self._speed(speed)
-        return self._apply(value, -value)
+        return self._apply(-value, value)
 
     def stop(self) -> MotorCommand:
         self.driver.stop()
