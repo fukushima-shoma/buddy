@@ -5,6 +5,7 @@ from robot.color_follow_cli import (
     action_for_detection,
     apply_tracking_action,
     build_parser,
+    tracking_decision,
 )
 from robot.motor import BuddyDrive, MockMotorDriver
 
@@ -30,6 +31,23 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertEqual(action_for_detection(detection("center")), "forward")
         self.assertEqual(action_for_detection(detection("right")), "right")
 
+    def test_large_target_stops_before_position_control(self) -> None:
+        close_target = detection("left")
+        close_target = ColorDetection(
+            **{**close_target.__dict__, "area": 30000.0}
+        )
+
+        self.assertEqual(
+            tracking_decision(close_target, stop_area=30000.0),
+            ("stop", "too-close"),
+        )
+
+    def test_missing_target_reports_not_found(self) -> None:
+        self.assertEqual(
+            tracking_decision(None, stop_area=30000.0),
+            ("stop", "not-found"),
+        )
+
     def test_actions_control_drive_and_missing_target_stops(self) -> None:
         driver = MockMotorDriver()
         drive = BuddyDrive(driver, max_speed=1.0)
@@ -50,6 +68,7 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertEqual(args.duration, 15.0)
         self.assertEqual(args.speed, 1.0)
         self.assertEqual(args.left_scale, 0.95)
+        self.assertEqual(args.stop_area, 30000.0)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--min-area", type=float, default=1000.0)
+    parser.add_argument(
+        "--stop-area",
+        type=float,
+        default=30000.0,
+        help="Stop when the detected area reaches this size. Default: 30000.",
+    )
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--turn-speed", type=float, default=1.0)
     parser.add_argument("--max-speed", type=float, default=1.0)
@@ -33,12 +39,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def action_for_detection(detection: ColorDetection | None) -> str:
+def tracking_decision(
+    detection: ColorDetection | None,
+    stop_area: float,
+) -> tuple[str, str]:
     if detection is None:
-        return "stop"
+        return "stop", "not-found"
+    if detection.area >= max(0.0, stop_area):
+        return "stop", "too-close"
     if detection.position in ("left", "right"):
-        return detection.position
-    return "forward"
+        return detection.position, "tracking"
+    return "forward", "tracking"
+
+
+def action_for_detection(
+    detection: ColorDetection | None,
+    stop_area: float = 30000.0,
+) -> str:
+    return tracking_decision(detection, stop_area)[0]
 
 
 def apply_tracking_action(
@@ -64,6 +82,7 @@ def run_color_follow(
     duration: float,
     fps: float,
     min_area: float,
+    stop_area: float,
     speed: float,
     turn_speed: float,
 ) -> None:
@@ -78,7 +97,7 @@ def run_color_follow(
             frame_started_at = time.monotonic()
             frame = source.capture_array()
             detection, _ = detect_color_frame(frame, color, min_area=min_area)
-            action = action_for_detection(detection)
+            action, reason = tracking_decision(detection, stop_area)
 
             if action != last_action:
                 command = apply_tracking_action(drive, action, speed, turn_speed)
@@ -90,7 +109,7 @@ def run_color_follow(
             if command is not None or now - last_report_at >= 1.0:
                 area = 0 if detection is None else detection.area
                 print(
-                    f"color={color} action={action} area={area:.0f}",
+                    f"color={color} action={action} reason={reason} area={area:.0f}",
                     flush=True,
                 )
                 last_report_at = now
@@ -122,6 +141,7 @@ def main() -> int:
             duration=args.duration,
             fps=args.fps,
             min_area=args.min_area,
+            stop_area=args.stop_area,
             speed=args.speed,
             turn_speed=args.turn_speed,
         )

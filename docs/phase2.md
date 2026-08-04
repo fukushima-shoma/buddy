@@ -127,6 +127,14 @@ python3 -m robot.color_follow_cli --backend gpiozero
 
 赤い物体が中央なら前進、左右ならその場旋回し、見失うと停止する。15秒で自動終了し、`Ctrl+C`でも停止する。車輪を床へ下ろす前に、左右の回転方向と停止を確認する。
 
+赤い領域が`30000`以上になると、対象へ十分近づいたものとして`reason=too-close`を表示して停止する。停止距離を調整する場合は、実行中に表示される`area`を確認して値を変更する。
+
+```sh
+python3 -m robot.color_follow_cli \
+  --backend gpiozero \
+  --stop-area 30000
+```
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意
@@ -139,3 +147,4 @@ python3 -m robot.color_follow_cli --backend gpiozero
 - [ ] OpenCVで色認識
 - [ ] 色追跡のモック動作確認
 - [ ] 車輪を浮かせて色追跡のモーター動作確認
+- [ ] 対象へ近づいたときの自動停止確認
