@@ -111,6 +111,22 @@ python3 -m robot.live_color_cli --color red
 
 物体をカメラの左右へゆっくり動かし、位置表示が変わることを確認する。途中で止める場合は`Ctrl+C`を押す。時間制限なしで実行する場合は`--duration 0`を指定する。
 
+## Step 7: 色を追跡して走行
+
+最初は車輪を床から浮かせ、モックモードで判断だけを確認する。
+
+```sh
+python3 -m robot.color_follow_cli
+```
+
+`action=left`、`forward`、`right`、`stop`が物体の位置に合わせて表示されることを確認する。次に、車輪を浮かせたままGPIO出力を試す。
+
+```sh
+python3 -m robot.color_follow_cli --backend gpiozero
+```
+
+赤い物体が中央なら前進、左右ならその場旋回し、見失うと停止する。15秒で自動終了し、`Ctrl+C`でも停止する。車輪を床へ下ろす前に、左右の回転方向と停止を確認する。
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意
@@ -121,3 +137,5 @@ python3 -m robot.live_color_cli --color red
 - [ ] 車体へカメラを固定
 - [ ] 走行中の映像取得
 - [ ] OpenCVで色認識
+- [ ] 色追跡のモック動作確認
+- [ ] 車輪を浮かせて色追跡のモーター動作確認
