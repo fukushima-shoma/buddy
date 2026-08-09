@@ -25,6 +25,7 @@ Phase2: カメラ搭載
 
 詳細手順:
 
+- [Buddy コマンド説明書](docs/commands.md)
 - [docs/phase0.md](docs/phase0.md)
 - [docs/phase1.md](docs/phase1.md)
 - [docs/phase2.md](docs/phase2.md)
