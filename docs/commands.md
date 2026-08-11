@@ -211,6 +211,43 @@ python3 -m robot.color_follow_cli \
 - 値を小さくする: 遠い段階で停止する
 - 値を大きくする: より近づいてから停止する
 
+## 距離センサーを測定
+
+Raspberry Pi OSでは仮想環境を有効化して実行する。
+
+```sh
+cd ~/buddy
+source .venv/bin/activate
+```
+
+まずモックでCLIを確認する。
+
+```sh
+python -m robot.distance_cli \
+  --backend mock \
+  --mock-distance 18 \
+  --stop-distance 20 \
+  --duration 1
+```
+
+VL53L1X実機で15秒間測定する。モーター用電池はOFFのまま実行する。
+
+```sh
+python -m robot.distance_cli \
+  --backend vl53l1x \
+  --stop-distance 20 \
+  --duration 15
+```
+
+出力例:
+
+```text
+distance=65.0cm obstacle=false
+distance=18.0cm obstacle=true
+```
+
+`obstacle=true`は測定距離が`--stop-distance`以下であることを表す。この段階では判定を表示するだけで、モーターは制御しない。
+
 ## GPIOが使用中と表示された場合
 
 `GPIO busy`は、別のプログラムがGPIOを使用している状態を表す。
