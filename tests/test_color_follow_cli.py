@@ -5,8 +5,10 @@ from robot.color_follow_cli import (
     action_for_detection,
     apply_tracking_action,
     build_parser,
+    create_distance_sensor,
     tracking_decision,
 )
+from robot.distance import MockDistanceSensor
 from robot.motor import BuddyDrive, MockMotorDriver
 
 
@@ -48,6 +50,41 @@ class ColorFollowCliTest(unittest.TestCase):
             ("stop", "not-found"),
         )
 
+    def test_distance_stop_has_priority_over_color_tracking(self) -> None:
+        self.assertEqual(
+            tracking_decision(
+                detection("center"),
+                stop_area=30000.0,
+                distance_cm=15.0,
+                stop_distance_cm=20.0,
+                distance_required=True,
+            ),
+            ("stop", "obstacle"),
+        )
+
+    def test_missing_distance_stops_when_sensor_is_required(self) -> None:
+        self.assertEqual(
+            tracking_decision(
+                detection("center"),
+                stop_area=30000.0,
+                distance_cm=None,
+                distance_required=True,
+            ),
+            ("stop", "distance-not-ready"),
+        )
+
+    def test_clear_distance_allows_color_tracking(self) -> None:
+        self.assertEqual(
+            tracking_decision(
+                detection("right"),
+                stop_area=30000.0,
+                distance_cm=50.0,
+                stop_distance_cm=20.0,
+                distance_required=True,
+            ),
+            ("right", "tracking"),
+        )
+
     def test_actions_control_drive_and_missing_target_stops(self) -> None:
         driver = MockMotorDriver()
         drive = BuddyDrive(driver, max_speed=1.0)
@@ -69,6 +106,18 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertEqual(args.speed, 1.0)
         self.assertEqual(args.left_scale, 0.95)
         self.assertEqual(args.stop_area, 30000.0)
+        self.assertEqual(args.distance_backend, "none")
+        self.assertEqual(args.stop_distance, 20.0)
+
+    def test_mock_distance_backend_is_available(self) -> None:
+        args = build_parser().parse_args(
+            ["--distance-backend", "mock", "--mock-distance", "15"]
+        )
+
+        sensor = create_distance_sensor(args)
+
+        self.assertIsInstance(sensor, MockDistanceSensor)
+        self.assertEqual(sensor.read_distance_cm(), 15.0)
 
 
 if __name__ == "__main__":

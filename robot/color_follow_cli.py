@@ -4,6 +4,7 @@ import argparse
 import time
 
 from robot.color_detection import HSV_RANGES, ColorDetection, detect_color_frame
+from robot.distance import DistanceSensor, MockDistanceSensor, obstacle_detected
 from robot.motor import BuddyDrive, MotorCommand
 from robot.motor_cli import create_driver
 from robot.picamera2_driver import Picamera2FrameSource
@@ -31,6 +32,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--left-scale", type=float, default=0.95)
     parser.add_argument("--right-scale", type=float, default=1.0)
     parser.add_argument(
+        "--distance-backend",
+        choices=("none", "mock", "vl53l1x"),
+        default="none",
+        help="Optional distance sensor used as the highest-priority stop input.",
+    )
+    parser.add_argument("--stop-distance", type=float, default=20.0)
+    parser.add_argument("--mock-distance", type=float, default=100.0)
+    parser.add_argument("--distance-mode", choices=(1, 2), type=int, default=2)
+    parser.add_argument(
+        "--timing-budget",
+        choices=(20, 33, 50, 100, 200, 500),
+        type=int,
+        default=100,
+    )
+    parser.add_argument(
         "--backend",
         choices=("mock", "gpiozero"),
         default="mock",
@@ -42,7 +58,14 @@ def build_parser() -> argparse.ArgumentParser:
 def tracking_decision(
     detection: ColorDetection | None,
     stop_area: float,
+    distance_cm: float | None = None,
+    stop_distance_cm: float = 20.0,
+    distance_required: bool = False,
 ) -> tuple[str, str]:
+    if distance_required and distance_cm is None:
+        return "stop", "distance-not-ready"
+    if distance_required and obstacle_detected(distance_cm, stop_distance_cm):
+        return "stop", "obstacle"
     if detection is None:
         return "stop", "not-found"
     if detection.area >= max(0.0, stop_area):
@@ -85,19 +108,34 @@ def run_color_follow(
     stop_area: float,
     speed: float,
     turn_speed: float,
+    distance_sensor: DistanceSensor | None = None,
+    stop_distance_cm: float = 20.0,
 ) -> None:
     started_at = time.monotonic()
     last_action = ""
     last_report_at = 0.0
     frame_interval = 1.0 / max(0.1, fps)
 
-    source.start()
     try:
+        source.start()
+        if distance_sensor is not None:
+            distance_sensor.start()
         while duration <= 0 or time.monotonic() - started_at < duration:
             frame_started_at = time.monotonic()
             frame = source.capture_array()
             detection, _ = detect_color_frame(frame, color, min_area=min_area)
-            action, reason = tracking_decision(detection, stop_area)
+            distance_cm = (
+                None
+                if distance_sensor is None
+                else distance_sensor.read_distance_cm()
+            )
+            action, reason = tracking_decision(
+                detection,
+                stop_area,
+                distance_cm=distance_cm,
+                stop_distance_cm=stop_distance_cm,
+                distance_required=distance_sensor is not None,
+            )
 
             if action != last_action:
                 command = apply_tracking_action(drive, action, speed, turn_speed)
@@ -108,8 +146,14 @@ def run_color_follow(
             now = time.monotonic()
             if command is not None or now - last_report_at >= 1.0:
                 area = 0 if detection is None else detection.area
+                distance_text = (
+                    "off"
+                    if distance_sensor is None
+                    else "not-ready" if distance_cm is None else f"{distance_cm:.1f}cm"
+                )
                 print(
-                    f"color={color} action={action} reason={reason} area={area:.0f}",
+                    f"color={color} action={action} reason={reason} "
+                    f"area={area:.0f} distance={distance_text}",
                     flush=True,
                 )
                 last_report_at = now
@@ -119,6 +163,23 @@ def run_color_follow(
                 time.sleep(remaining)
     finally:
         drive.stop()
+        if distance_sensor is not None:
+            distance_sensor.close()
+
+
+def create_distance_sensor(args: argparse.Namespace) -> DistanceSensor | None:
+    if args.distance_backend == "none":
+        return None
+    if args.distance_backend == "mock":
+        return MockDistanceSensor(args.mock_distance)
+    if args.distance_backend == "vl53l1x":
+        from robot.vl53l1x_driver import Vl53l1xDistanceSensor
+
+        return Vl53l1xDistanceSensor(
+            distance_mode=args.distance_mode,
+            timing_budget_ms=args.timing_budget,
+        )
+    raise ValueError(f"Unsupported distance backend: {args.distance_backend}")
 
 
 def main() -> int:
@@ -131,8 +192,12 @@ def main() -> int:
         left_scale=args.left_scale,
         right_scale=args.right_scale,
     )
+    distance_sensor = create_distance_sensor(args)
 
-    print(f"backend={args.backend} tracking={args.color} Ctrl+C: stop")
+    print(
+        f"backend={args.backend} distance-backend={args.distance_backend} "
+        f"tracking={args.color} Ctrl+C: stop"
+    )
     try:
         run_color_follow(
             source,
@@ -144,6 +209,8 @@ def main() -> int:
             stop_area=args.stop_area,
             speed=args.speed,
             turn_speed=args.turn_speed,
+            distance_sensor=distance_sensor,
+            stop_distance_cm=args.stop_distance,
         )
     except KeyboardInterrupt:
         print("Stopping color follow.")

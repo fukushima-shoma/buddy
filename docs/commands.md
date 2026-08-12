@@ -248,6 +248,38 @@ distance=18.0cm obstacle=true
 
 `obstacle=true`は測定距離が`--stop-distance`以下であることを表す。この段階では判定を表示するだけで、モーターは制御しない。
 
+## 距離センサー付き色追跡
+
+最初はモーターモックと距離センサーモックで統合判断を確認する。
+
+```sh
+python -m robot.color_follow_cli \
+  --backend mock \
+  --distance-backend mock \
+  --mock-distance 15 \
+  --stop-distance 20
+```
+
+赤い物体が見えていても、`reason=obstacle`と`action=stop`が表示される。
+
+次に、車輪を床から浮かせてカメラ・距離センサー・モーターを統合する。
+
+```sh
+python -m robot.color_follow_cli \
+  --backend gpiozero \
+  --distance-backend vl53l1x \
+  --stop-distance 20 \
+  --duration 15
+```
+
+距離センサーを使用する場合の優先順位:
+
+1. 距離が未取得なら`reason=distance-not-ready`で停止
+2. 20cm以下なら`reason=obstacle`で停止
+3. 色を見失ったら停止
+4. 色領域が大きすぎたら停止
+5. 安全な距離なら色の位置に従って追跡
+
 ## GPIOが使用中と表示された場合
 
 `GPIO busy`は、別のプログラムがGPIOを使用している状態を表す。
