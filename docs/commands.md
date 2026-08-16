@@ -206,6 +206,23 @@ python3 -m robot.color_follow_cli \
   --duration 15
 ```
 
+一瞬の未検出による停止と、旋回による対象の追い越しを抑える場合:
+
+```sh
+python3 -m robot.color_follow_cli \
+  --backend gpiozero \
+  --fps 10 \
+  --min-area 100 \
+  --lost-frame-tolerance 1 \
+  --turn-pulse 0.08 \
+  --duration 15
+```
+
+`--lost-frame-tolerance 1`は1フレームだけ最後の検出を保持する。連続して
+見失った場合は従来どおり停止する。`--turn-pulse 0.08`は80ミリ秒だけ旋回して
+停止し、次のカメラ画像で方向を判断し直す。距離センサーによる障害物停止は
+これらより常に優先される。
+
 `stop-area`は画像内の対象面積であり、実際の距離ではない。
 
 - 値を小さくする: 遠い段階で停止する
@@ -317,6 +334,8 @@ sudo reboot
 | `--stop-area` | 遠くで停止する | 近くまで進む |
 | `--duration` | 短時間で安全に終了する | 長時間動作する。`0`は無制限 |
 | `--speed` | ゆっくり動く。ただしモーターが回らない場合がある | 速く動く |
+| `--lost-frame-tolerance` | 見失うとすぐ停止する | 瞬間的な未検出に強いが停止が遅れる |
+| `--turn-pulse` | 細かく旋回して再確認する | 大きく旋回するが対象を追い越しやすい |
 
 ## 安全上の注意
 

@@ -6,6 +6,7 @@ from robot.color_follow_cli import (
     apply_tracking_action,
     build_parser,
     create_distance_sensor,
+    retain_recent_detection,
     retain_recent_distance,
     tracking_decision,
 )
@@ -102,6 +103,28 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertIsNone(distance)
         self.assertEqual(measured_at, 10.0)
 
+    def test_single_missed_detection_reuses_previous_detection(self) -> None:
+        previous = detection("center")
+
+        effective, retained, missed = retain_recent_detection(
+            None, previous, missed_frames=0, tolerance=1
+        )
+
+        self.assertEqual(effective, previous)
+        self.assertEqual(retained, previous)
+        self.assertEqual(missed, 1)
+
+    def test_sustained_detection_loss_clears_previous_detection(self) -> None:
+        previous = detection("center")
+
+        effective, retained, missed = retain_recent_detection(
+            None, previous, missed_frames=1, tolerance=1
+        )
+
+        self.assertIsNone(effective)
+        self.assertIsNone(retained)
+        self.assertEqual(missed, 2)
+
     def test_actions_control_drive_and_missing_target_stops(self) -> None:
         driver = MockMotorDriver()
         drive = BuddyDrive(driver, max_speed=1.0)
@@ -122,6 +145,8 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertEqual(args.duration, 15.0)
         self.assertEqual(args.speed, 1.0)
         self.assertEqual(args.left_scale, 0.95)
+        self.assertEqual(args.turn_pulse, 0.08)
+        self.assertEqual(args.lost_frame_tolerance, 1)
         self.assertEqual(args.stop_area, 30000.0)
         self.assertEqual(args.distance_backend, "none")
         self.assertEqual(args.stop_distance, 20.0)
