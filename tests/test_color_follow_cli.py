@@ -6,6 +6,7 @@ from robot.color_follow_cli import (
     apply_tracking_action,
     build_parser,
     create_distance_sensor,
+    retain_recent_distance,
     tracking_decision,
 )
 from robot.distance import MockDistanceSensor
@@ -84,6 +85,22 @@ class ColorFollowCliTest(unittest.TestCase):
             ),
             ("right", "tracking"),
         )
+
+    def test_recent_distance_is_reused_between_sensor_updates(self) -> None:
+        distance, measured_at = retain_recent_distance(
+            None, 42.0, 10.0, now=10.2
+        )
+
+        self.assertEqual(distance, 42.0)
+        self.assertEqual(measured_at, 10.0)
+
+    def test_stale_distance_is_not_reused(self) -> None:
+        distance, measured_at = retain_recent_distance(
+            None, 42.0, 10.0, now=10.6
+        )
+
+        self.assertIsNone(distance)
+        self.assertEqual(measured_at, 10.0)
 
     def test_actions_control_drive_and_missing_target_stops(self) -> None:
         driver = MockMotorDriver()

@@ -75,6 +75,25 @@ def tracking_decision(
     return "forward", "tracking"
 
 
+def retain_recent_distance(
+    measured_distance_cm: float | None,
+    previous_distance_cm: float | None,
+    previous_measurement_at: float | None,
+    now: float,
+    stale_after: float = 0.5,
+) -> tuple[float | None, float | None]:
+    """Keep the latest valid reading between VL53L1X measurement cycles."""
+    if measured_distance_cm is not None:
+        return measured_distance_cm, now
+    if (
+        previous_distance_cm is not None
+        and previous_measurement_at is not None
+        and now - previous_measurement_at <= stale_after
+    ):
+        return previous_distance_cm, previous_measurement_at
+    return None, previous_measurement_at
+
+
 def action_for_detection(
     detection: ColorDetection | None,
     stop_area: float = 30000.0,
@@ -114,6 +133,8 @@ def run_color_follow(
     started_at = time.monotonic()
     last_action = ""
     last_report_at = 0.0
+    last_distance_cm: float | None = None
+    last_distance_at: float | None = None
     frame_interval = 1.0 / max(0.1, fps)
 
     try:
@@ -124,11 +145,22 @@ def run_color_follow(
             frame_started_at = time.monotonic()
             frame = source.capture_array()
             detection, _ = detect_color_frame(frame, color, min_area=min_area)
-            distance_cm = (
+            measured_distance_cm = (
                 None
                 if distance_sensor is None
                 else distance_sensor.read_distance_cm()
             )
+            if distance_sensor is None:
+                distance_cm = None
+            else:
+                distance_cm, last_distance_at = retain_recent_distance(
+                    measured_distance_cm,
+                    last_distance_cm,
+                    last_distance_at,
+                    time.monotonic(),
+                )
+                if distance_cm is not None:
+                    last_distance_cm = distance_cm
             action, reason = tracking_decision(
                 detection,
                 stop_area,
