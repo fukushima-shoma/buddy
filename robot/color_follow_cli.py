@@ -16,15 +16,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--color", choices=tuple(HSV_RANGES), default="red")
     parser.add_argument("--duration", type=float, default=15.0)
-    parser.add_argument("--fps", type=float, default=5.0)
+    parser.add_argument("--fps", type=float, default=10.0)
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--min-area", type=float, default=1000.0)
+    parser.add_argument("--min-area", type=float, default=50.0)
     parser.add_argument(
         "--stop-area",
         type=float,
-        default=30000.0,
-        help="Stop when the detected area reaches this size. Default: 30000.",
+        default=250000.0,
+        help="Stop when the detected area reaches this size. Default: 250000.",
     )
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--turn-speed", type=float, default=1.0)
@@ -43,7 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="none",
         help="Optional distance sensor used as the highest-priority stop input.",
     )
-    parser.add_argument("--stop-distance", type=float, default=20.0)
+    parser.add_argument("--stop-distance", type=float, default=60.0)
+    parser.add_argument(
+        "--resume-distance",
+        type=float,
+        default=70.0,
+        help="After an obstacle stop, resume at or beyond this distance.",
+    )
     parser.add_argument("--mock-distance", type=float, default=100.0)
     parser.add_argument(
         "--lost-frame-tolerance",
@@ -73,10 +79,13 @@ def tracking_decision(
     distance_cm: float | None = None,
     stop_distance_cm: float = 20.0,
     distance_required: bool = False,
+    obstacle_latched: bool = False,
 ) -> tuple[str, str]:
     if distance_required and distance_cm is None:
         return "stop", "distance-not-ready"
-    if distance_required and obstacle_detected(distance_cm, stop_distance_cm):
+    if distance_required and (
+        obstacle_latched or obstacle_detected(distance_cm, stop_distance_cm)
+    ):
         return "stop", "obstacle"
     if detection is None:
         return "stop", "not-found"
@@ -121,6 +130,22 @@ def retain_recent_detection(
     return None, None, missed_frames
 
 
+def update_obstacle_latch(
+    distance_cm: float | None,
+    stop_distance_cm: float,
+    resume_distance_cm: float,
+    obstacle_latched: bool,
+) -> bool:
+    """Latch an obstacle stop until the path has a safe clearance margin."""
+    if distance_cm is None:
+        return obstacle_latched
+    stop_distance_cm = max(0.0, stop_distance_cm)
+    resume_distance_cm = max(stop_distance_cm, resume_distance_cm)
+    if obstacle_latched:
+        return distance_cm < resume_distance_cm
+    return distance_cm <= stop_distance_cm
+
+
 def action_for_detection(
     detection: ColorDetection | None,
     stop_area: float = 30000.0,
@@ -158,6 +183,7 @@ def run_color_follow(
     lost_frame_tolerance: int,
     distance_sensor: DistanceSensor | None = None,
     stop_distance_cm: float = 20.0,
+    resume_distance_cm: float = 30.0,
 ) -> None:
     started_at = time.monotonic()
     last_action = ""
@@ -166,6 +192,7 @@ def run_color_follow(
     last_distance_at: float | None = None
     last_detection: ColorDetection | None = None
     missed_detection_frames = 0
+    obstacle_latched = False
     frame_interval = 1.0 / max(0.1, fps)
 
     try:
@@ -202,12 +229,19 @@ def run_color_follow(
                 )
                 if distance_cm is not None:
                     last_distance_cm = distance_cm
+            obstacle_latched = update_obstacle_latch(
+                distance_cm,
+                stop_distance_cm,
+                resume_distance_cm,
+                obstacle_latched,
+            )
             action, reason = tracking_decision(
                 detection,
                 stop_area,
                 distance_cm=distance_cm,
                 stop_distance_cm=stop_distance_cm,
                 distance_required=distance_sensor is not None,
+                obstacle_latched=obstacle_latched,
             )
 
             if action in ("left", "right") and turn_pulse > 0:
@@ -291,6 +325,7 @@ def main() -> int:
             lost_frame_tolerance=args.lost_frame_tolerance,
             distance_sensor=distance_sensor,
             stop_distance_cm=args.stop_distance,
+            resume_distance_cm=args.resume_distance,
         )
     except KeyboardInterrupt:
         print("Stopping color follow.")

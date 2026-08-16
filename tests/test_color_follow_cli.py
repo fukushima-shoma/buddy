@@ -9,6 +9,7 @@ from robot.color_follow_cli import (
     retain_recent_detection,
     retain_recent_distance,
     tracking_decision,
+    update_obstacle_latch,
 )
 from robot.distance import MockDistanceSensor
 from robot.motor import BuddyDrive, MockMotorDriver
@@ -87,6 +88,24 @@ class ColorFollowCliTest(unittest.TestCase):
             ("right", "tracking"),
         )
 
+    def test_obstacle_latch_stays_set_until_resume_distance(self) -> None:
+        self.assertTrue(update_obstacle_latch(59.0, 60.0, 70.0, False))
+        self.assertTrue(update_obstacle_latch(65.0, 60.0, 70.0, True))
+        self.assertFalse(update_obstacle_latch(70.0, 60.0, 70.0, True))
+
+    def test_latched_obstacle_has_priority_above_stop_distance(self) -> None:
+        self.assertEqual(
+            tracking_decision(
+                detection("center"),
+                stop_area=250000.0,
+                distance_cm=65.0,
+                stop_distance_cm=60.0,
+                distance_required=True,
+                obstacle_latched=True,
+            ),
+            ("stop", "obstacle"),
+        )
+
     def test_recent_distance_is_reused_between_sensor_updates(self) -> None:
         distance, measured_at = retain_recent_distance(
             None, 42.0, 10.0, now=10.2
@@ -147,9 +166,12 @@ class ColorFollowCliTest(unittest.TestCase):
         self.assertEqual(args.left_scale, 0.95)
         self.assertEqual(args.turn_pulse, 0.08)
         self.assertEqual(args.lost_frame_tolerance, 1)
-        self.assertEqual(args.stop_area, 30000.0)
+        self.assertEqual(args.fps, 10.0)
+        self.assertEqual(args.min_area, 50.0)
+        self.assertEqual(args.stop_area, 250000.0)
         self.assertEqual(args.distance_backend, "none")
-        self.assertEqual(args.stop_distance, 20.0)
+        self.assertEqual(args.stop_distance, 60.0)
+        self.assertEqual(args.resume_distance, 70.0)
 
     def test_mock_distance_backend_is_available(self) -> None:
         args = build_parser().parse_args(

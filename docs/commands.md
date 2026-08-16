@@ -185,6 +185,17 @@ python3 -m robot.color_follow_cli \
   --stop-area 30000
 ```
 
+Buddyの実機環境で調整した既定値は、`fps=10`、`min-area=50`、
+`stop-area=250000`、`stop-distance=60cm`、`resume-distance=70cm`、
+`lost-frame-tolerance=1`、`turn-pulse=0.08秒`。距離センサーを含む通常の
+追跡は次の短いコマンドで実行できる。
+
+```sh
+python3 -m robot.color_follow_cli \
+  --backend gpiozero \
+  --distance-backend vl53l1x
+```
+
 判断ルール:
 
 | 検出状態 | 表示 | 車体の動作 |
@@ -297,6 +308,11 @@ python -m robot.color_follow_cli \
 4. 色領域が大きすぎたら停止
 5. 安全な距離なら色の位置に従って追跡
 
+既定では60cm以下で一度障害物停止すると、70cm以上へ離れるまで停止を保持する。
+この差をヒステリシスと呼び、距離の境界付近で停止と再発進を繰り返すのを防ぐ。
+変更する場合は`--stop-distance`と`--resume-distance`を指定し、再開距離は停止距離
+以上にする。
+
 ## GPIOが使用中と表示された場合
 
 `GPIO busy`は、別のプログラムがGPIOを使用している状態を表す。
@@ -332,6 +348,8 @@ sudo reboot
 | `--fps` | 処理が軽いが高速な対象を逃しやすい | 高速な対象を追いやすいが負荷が増える |
 | `--min-area` | 小さな対象も拾うが誤検出が増える | ノイズに強いが遠い対象を逃しやすい |
 | `--stop-area` | 遠くで停止する | 近くまで進む |
+| `--stop-distance` | 対象の近くで停止する | 対象から離れて停止する |
+| `--resume-distance` | 障害物停止から早く再開する | 十分離れるまで停止を保持する |
 | `--duration` | 短時間で安全に終了する | 長時間動作する。`0`は無制限 |
 | `--speed` | ゆっくり動く。ただしモーターが回らない場合がある | 速く動く |
 | `--lost-frame-tolerance` | 見失うとすぐ停止する | 瞬間的な未検出に強いが停止が遅れる |
