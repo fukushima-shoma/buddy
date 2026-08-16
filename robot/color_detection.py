@@ -26,8 +26,10 @@ class ColorDetection:
 
 HSV_RANGES = {
     "red": (
-        HsvRange((0, 120, 70), (10, 255, 255)),
-        HsvRange((170, 120, 70), (179, 255, 255)),
+        # Keep the hue range narrow and require vivid pixels so brown wood in
+        # Buddy's operating environment is not mistaken for a red target.
+        HsvRange((0, 160, 100), (7, 255, 255)),
+        HsvRange((173, 160, 100), (179, 255, 255)),
     ),
     "green": (HsvRange((35, 80, 60), (85, 255, 255)),),
     "blue": (HsvRange((90, 80, 60), (135, 255, 255)),),

@@ -9,6 +9,14 @@ class ColorDetectionTest(unittest.TestCase):
         self.assertEqual(set(HSV_RANGES), {"red", "green", "blue"})
         self.assertEqual(len(HSV_RANGES["red"]), 2)
 
+    def test_red_range_rejects_dull_brown_pixels(self) -> None:
+        low_red, high_red = HSV_RANGES["red"]
+
+        self.assertGreaterEqual(low_red.lower[1], 160)
+        self.assertGreaterEqual(low_red.lower[2], 100)
+        self.assertLessEqual(low_red.upper[0], 7)
+        self.assertGreaterEqual(high_red.lower[0], 173)
+
     def test_horizontal_position_uses_center_deadzone(self) -> None:
         self.assertEqual(horizontal_position(100, 1000), "left")
         self.assertEqual(horizontal_position(500, 1000), "center")
