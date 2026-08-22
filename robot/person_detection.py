@@ -109,14 +109,14 @@ class PersonAreaLatch:
         self,
         detection: PersonDetection | None,
     ) -> tuple[bool, float | None]:
-        if self.stop_area <= 0:
-            self.latched = False
-            return False, None
         if detection is None:
             return self.latched, None
 
         self._areas.append(float(detection.width * detection.height))
         filtered_area = float(median(self._areas))
+        if self.stop_area <= 0:
+            self.latched = False
+            return False, filtered_area
         if not self.latched:
             if filtered_area >= self.stop_area:
                 self._stop_frames += 1

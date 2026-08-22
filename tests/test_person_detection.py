@@ -133,3 +133,11 @@ class PersonDetectionTest(unittest.TestCase):
         self.assertTrue(latch.update(large)[0])
         self.assertTrue(latch.update(small)[0])
         self.assertFalse(latch.update(small)[0])
+
+    def test_disabled_person_area_stop_still_reports_filtered_area(self) -> None:
+        latch = PersonAreaLatch(stop_area=0, window_size=3)
+
+        latched, filtered = latch.update(self.make_detection(320))
+
+        self.assertFalse(latched)
+        self.assertEqual(filtered, 28000.0)

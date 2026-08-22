@@ -387,27 +387,25 @@ python3 -m robot.person_follow_cli \
 
 誤検出や一時的な値の揺れを抑える既定の安定化:
 
-- 人物を2フレーム連続検出するまで`reason=person-confirming`で停止
+- 人物を3フレーム連続検出するまで`reason=person-confirming`で停止
 - 追跡開始後は1フレームだけ未検出を許容
 - 直近3回の人物中心位置の中央値で`left/center/right`を決定
 - 直近3回の距離の中央値で単発の距離スパイクを除外
 - 生の距離が60cm以下なら中央値を待たず即座に停止
 - 停止解除は70cm以上を5フレーム連続確認してから実行
-- 人物枠は直近3回の面積中央値を使用
-- 面積中央値が180000以上で2回連続したら`reason=person-too-close`で補助停止
-- 面積中央値が140000以下で3回連続するまで画像による停止を保持
+- 人物枠は直近3回の面積中央値をログへ記録するが、既定では停止に使用しない
 
 必要な場合は次のオプションで変更できる。
 
 ```sh
 python3 -m robot.person_follow_cli \
   --distance-backend vl53l1x \
-  --person-confirm-frames 2 \
+  --person-confirm-frames 3 \
   --lost-frame-tolerance 1 \
   --position-window 3 \
   --distance-window 3 \
   --resume-confirm-frames 5 \
-  --stop-person-area 180000 \
+  --stop-person-area 0 \
   --resume-person-area 140000 \
   --person-area-window 3 \
   --person-area-stop-confirm-frames 2 \
@@ -416,10 +414,10 @@ python3 -m robot.person_follow_cli \
 ```
 
 ログの`raw-area`と`raw-distance`は現在フレームの生値、`area`と`distance`は中央値
-などの安定化後の値。MediaPipeが推定した人物枠は姿勢で変動するため、停止と解除に
-異なる値と連続確認を使う。環境に合わせて調整でき、`--stop-person-area 0`で画像の
-補助停止を無効化できる。距離の生値は平滑化より先に停止判定へ使うため近距離では
-即停止し、遠距離への単発スパイクでは再開しない。
+などの安定化後の値。MediaPipeが推定した人物枠は姿勢で大きく変動するため、既定の
+`--stop-person-area 0`では記録だけを行い、停止判定には使用しない。画像による補助
+停止を実験する場合だけ正の値を指定する。距離の生値は平滑化より先に停止判定へ
+使うため近距離では即停止し、遠距離への単発スパイクでは再開しない。
 
 ## GPIOが使用中と表示された場合
 
