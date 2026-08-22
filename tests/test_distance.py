@@ -1,6 +1,11 @@
 import unittest
 
-from robot.distance import MockDistanceSensor, obstacle_detected
+from robot.distance import (
+    MockDistanceSensor,
+    obstacle_detected,
+    retain_recent_distance,
+    update_obstacle_latch,
+)
 from robot.distance_cli import build_parser, create_sensor
 
 
@@ -25,6 +30,17 @@ class DistanceTest(unittest.TestCase):
 
         self.assertIsInstance(sensor, MockDistanceSensor)
         self.assertEqual(sensor.read_distance_cm(), 12.5)
+
+    def test_recent_distance_is_retained_between_updates(self) -> None:
+        self.assertEqual(
+            retain_recent_distance(None, 42.0, 10.0, now=10.2),
+            (42.0, 10.0),
+        )
+
+    def test_obstacle_latch_requires_clearance_to_release(self) -> None:
+        self.assertTrue(update_obstacle_latch(59.0, 60.0, 70.0, False))
+        self.assertTrue(update_obstacle_latch(65.0, 60.0, 70.0, True))
+        self.assertFalse(update_obstacle_latch(70.0, 60.0, 70.0, True))
 
 
 if __name__ == "__main__":

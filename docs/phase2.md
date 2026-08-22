@@ -152,6 +152,29 @@ python3 -m robot.person_cli --duration 30
 `captures/person-detected.jpg`へ保存される。従来のHOG版は比較用として
 `--backend hog`で実行できる。
 
+## Step 9: 人物検出と距離センサーを統合
+
+モーターを動かさず、人物の位置と距離から安全な走行判断だけを表示する。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --distance-backend mock \
+  --mock-distance 100 \
+  --duration 30
+```
+
+判断表示を確認した後、VL53L1X実機へ切り替える。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --distance-backend vl53l1x \
+  --duration 30
+```
+
+人物を見失った場合、距離が未取得の場合、60cm以下に障害物がある場合は停止判断に
+なる。70cm以上へ離れるまで障害物停止を保持する。この段階ではモーター用電池を
+OFFのままにする。
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意
@@ -166,3 +189,4 @@ python3 -m robot.person_cli --duration 30
 - [ ] 車輪を浮かせて色追跡のモーター動作確認
 - [ ] 対象へ近づいたときの自動停止確認
 - [ ] モーターなしで人物検出
+- [ ] モーターなしで人物検出と距離センサーを統合

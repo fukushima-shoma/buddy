@@ -356,6 +356,35 @@ python3 -m robot.person_cli \
   --duration 30
 ```
 
+## 人物検出と距離センサーの統合（モーターなし）
+
+人物の位置と距離から走行判断だけを表示する。このCLIにはモーターバックエンドが
+なく、モーター用電池をOFFのまま確認できる。
+
+最初に100cm固定のモック距離で確認する。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --distance-backend mock \
+  --mock-distance 100 \
+  --duration 30
+```
+
+人物が中央なら`action=forward`、左右なら`action=left/right`、人物がいなければ
+`reason=not-found`で`action=stop`になる。
+
+次にVL53L1X実機を使用する。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --distance-backend vl53l1x \
+  --duration 30
+```
+
+60cm以下では人物の位置に関係なく`reason=obstacle`で停止し、70cm以上へ離れるまで
+停止を保持する。距離がまだ取得できない場合も`reason=distance-not-ready`で停止する。
+最後の枠付き画像は`captures/person-follow.jpg`へ保存される。
+
 ## GPIOが使用中と表示された場合
 
 `GPIO busy`は、別のプログラムがGPIOを使用している状態を表す。

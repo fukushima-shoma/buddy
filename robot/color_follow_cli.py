@@ -4,7 +4,13 @@ import argparse
 import time
 
 from robot.color_detection import HSV_RANGES, ColorDetection, detect_color_frame
-from robot.distance import DistanceSensor, MockDistanceSensor, obstacle_detected
+from robot.distance import (
+    DistanceSensor,
+    MockDistanceSensor,
+    obstacle_detected,
+    retain_recent_distance,
+    update_obstacle_latch,
+)
 from robot.motor import BuddyDrive, MotorCommand
 from robot.motor_cli import create_driver
 from robot.picamera2_driver import Picamera2FrameSource
@@ -96,25 +102,6 @@ def tracking_decision(
     return "forward", "tracking"
 
 
-def retain_recent_distance(
-    measured_distance_cm: float | None,
-    previous_distance_cm: float | None,
-    previous_measurement_at: float | None,
-    now: float,
-    stale_after: float = 0.5,
-) -> tuple[float | None, float | None]:
-    """Keep the latest valid reading between VL53L1X measurement cycles."""
-    if measured_distance_cm is not None:
-        return measured_distance_cm, now
-    if (
-        previous_distance_cm is not None
-        and previous_measurement_at is not None
-        and now - previous_measurement_at <= stale_after
-    ):
-        return previous_distance_cm, previous_measurement_at
-    return None, previous_measurement_at
-
-
 def retain_recent_detection(
     detection: ColorDetection | None,
     previous_detection: ColorDetection | None,
@@ -128,22 +115,6 @@ def retain_recent_detection(
     if previous_detection is not None and missed_frames <= max(0, tolerance):
         return previous_detection, previous_detection, missed_frames
     return None, None, missed_frames
-
-
-def update_obstacle_latch(
-    distance_cm: float | None,
-    stop_distance_cm: float,
-    resume_distance_cm: float,
-    obstacle_latched: bool,
-) -> bool:
-    """Latch an obstacle stop until the path has a safe clearance margin."""
-    if distance_cm is None:
-        return obstacle_latched
-    stop_distance_cm = max(0.0, stop_distance_cm)
-    resume_distance_cm = max(stop_distance_cm, resume_distance_cm)
-    if obstacle_latched:
-        return distance_cm < resume_distance_cm
-    return distance_cm <= stop_distance_cm
 
 
 def action_for_detection(
