@@ -313,6 +313,36 @@ python -m robot.color_follow_cli \
 変更する場合は`--stop-distance`と`--resume-distance`を指定し、再開距離は停止距離
 以上にする。
 
+## 人物検出（モーターなし）
+
+OpenCV標準のHOG検出器で、カメラに映った人物の有無と左右位置を確認する。
+このコマンドはモーターを制御しない。
+
+```sh
+python3 -m robot.person_cli --duration 30
+```
+
+成功例:
+
+```text
+person=detected position=center center=(320,240) confidence=0.84
+person=not-found
+snapshot=captures/person-detected.jpg
+```
+
+人物の全身がカメラに入り、背景と区別しやすい明るい場所で試す。低いカメラ位置
+では上半身だけになりやすいため、最初はカメラから2〜4mほど離れて立つ。
+処理負荷を抑える既定値は2fps。検出しにくい場合は信頼度の下限を少し下げる。
+
+```sh
+python3 -m robot.person_cli \
+  --duration 30 \
+  --min-confidence 0.1
+```
+
+`--min-confidence`を下げると検出しやすくなるが、家具などの誤検出も増える。
+最後の枠付き画像は`captures/person-detected.jpg`へ保存される。
+
 ## GPIOが使用中と表示された場合
 
 `GPIO busy`は、別のプログラムがGPIOを使用している状態を表す。

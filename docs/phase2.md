@@ -135,6 +135,19 @@ python3 -m robot.color_follow_cli \
   --stop-area 30000
 ```
 
+## Step 8: 人物を検出
+
+最初はモーターを動かさず、OpenCV標準のHOG検出器で人物の有無と左右位置を確認する。
+
+```sh
+python3 -m robot.person_cli --duration 30
+```
+
+人物の全身が映るように2〜4mほど離れて立ち、`person=detected`と位置が表示される
+ことを確認する。最後の処理画像は`captures/person-detected.jpg`へ保存される。
+HOGは追加モデルなしで試せる基礎実装であり、低いアングルや上半身だけの映像では
+検出しにくい。実機結果を確認してから、より軽量なAIモデルへの移行を判断する。
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意
@@ -148,3 +161,4 @@ python3 -m robot.color_follow_cli \
 - [ ] 色追跡のモック動作確認
 - [ ] 車輪を浮かせて色追跡のモーター動作確認
 - [ ] 対象へ近づいたときの自動停止確認
+- [ ] モーターなしで人物検出
