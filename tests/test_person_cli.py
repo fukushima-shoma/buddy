@@ -26,9 +26,10 @@ class PersonCliTest(unittest.TestCase):
         args = build_parser().parse_args([])
 
         self.assertEqual(args.duration, 15.0)
-        self.assertEqual(args.fps, 2.0)
+        self.assertEqual(args.backend, "mediapipe")
+        self.assertEqual(args.fps, 5.0)
         self.assertEqual((args.width, args.height), (640, 480))
-        self.assertEqual(args.min_confidence, 0.2)
+        self.assertIsNone(args.min_confidence)
 
 
 if __name__ == "__main__":

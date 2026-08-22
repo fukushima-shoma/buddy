@@ -1,6 +1,9 @@
 import unittest
 
-from robot.person_detection import select_person_detection
+from robot.person_detection import (
+    mediapipe_result_to_detection,
+    select_person_detection,
+)
 
 
 class PersonDetectionTest(unittest.TestCase):
@@ -27,3 +30,14 @@ class PersonDetectionTest(unittest.TestCase):
         )
 
         self.assertIsNone(detection)
+
+    def test_converts_mediapipe_body_circle_to_detection(self) -> None:
+        result = [0, 0, 0, 0, 320, 240, 320, 440, 320, 180, 320, 80, 0.9]
+
+        detection = mediapipe_result_to_detection(result, 640, 480)
+
+        self.assertEqual(detection.position, "center")
+        self.assertEqual((detection.center_x, detection.center_y), (320, 240))
+        self.assertEqual((detection.x, detection.y), (120, 40))
+        self.assertEqual((detection.width, detection.height), (400, 400))
+        self.assertEqual(detection.confidence, 0.9)

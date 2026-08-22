@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,109 @@ class HogPersonDetector:
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 255),
+                2,
+            )
+        return detection, annotated
+
+
+def mediapipe_result_to_detection(
+    result: Any,
+    image_width: int,
+    image_height: int,
+) -> PersonDetection:
+    """Convert an OpenCV Zoo MP-PersonDet row to Buddy's detection format."""
+    hip_x, hip_y = float(result[4]), float(result[5])
+    body_x, body_y = float(result[6]), float(result[7])
+    radius = max(1.0, ((hip_x - body_x) ** 2 + (hip_y - body_y) ** 2) ** 0.5)
+    x1 = max(0, int(hip_x - radius))
+    y1 = max(0, int(hip_y - radius))
+    x2 = min(image_width, int(hip_x + radius))
+    y2 = min(image_height, int(hip_y + radius))
+    center_x = max(0, min(image_width - 1, int(hip_x)))
+    center_y = max(0, min(image_height - 1, int(hip_y)))
+    return PersonDetection(
+        confidence=float(result[-1]),
+        center_x=center_x,
+        center_y=center_y,
+        x=x1,
+        y=y1,
+        width=max(1, x2 - x1),
+        height=max(1, y2 - y1),
+        position=horizontal_position(center_x, image_width),
+    )
+
+
+class MediaPipePersonDetector:
+    """OpenCV Zoo's lightweight MediaPipe person detector."""
+
+    def __init__(
+        self,
+        model_path: Path,
+        helper_path: Path,
+        min_confidence: float = 0.5,
+    ) -> None:
+        try:
+            import cv2
+        except ImportError as exc:
+            raise RuntimeError(
+                "OpenCV is required. Install it with: "
+                "sudo apt install -y python3-opencv opencv-data"
+            ) from exc
+
+        model_path = model_path.expanduser()
+        helper_path = helper_path.expanduser()
+        if not model_path.is_file() or not helper_path.is_file():
+            raise RuntimeError(
+                "MediaPipe person model is not installed. Run: "
+                "bash scripts/install_person_model.sh"
+            )
+
+        spec = importlib.util.spec_from_file_location(
+            "buddy_opencv_zoo_mp_persondet",
+            helper_path,
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"Could not load person detector helper: {helper_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        self._cv2 = cv2
+        self._detector = module.MPPersonDet(
+            modelPath=str(model_path),
+            scoreThreshold=max(0.0, min_confidence),
+        )
+
+    def detect(self, image: Any) -> tuple[PersonDetection | None, Any]:
+        results = self._detector.infer(image)
+        detections = [
+            mediapipe_result_to_detection(row, image.shape[1], image.shape[0])
+            for row in results
+        ]
+        detection = max(detections, key=lambda item: item.confidence, default=None)
+        annotated = image.copy()
+        if detection is not None:
+            cv2 = self._cv2
+            cv2.rectangle(
+                annotated,
+                (detection.x, detection.y),
+                (detection.x + detection.width, detection.y + detection.height),
+                (0, 255, 0),
+                3,
+            )
+            cv2.circle(
+                annotated,
+                (detection.center_x, detection.center_y),
+                5,
+                (0, 0, 255),
+                -1,
+            )
+            cv2.putText(
+                annotated,
+                f"person {detection.position} confidence={detection.confidence:.2f}",
+                (detection.x, max(30, detection.y - 10)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
                 2,
             )
         return detection, annotated

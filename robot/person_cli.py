@@ -6,6 +6,7 @@ import time
 
 from robot.person_detection import (
     HogPersonDetector,
+    MediaPipePersonDetector,
     PersonDetection,
     save_annotated_image,
 )
@@ -16,12 +17,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Detect a person without moving Buddy's motors."
     )
+    parser.add_argument(
+        "--backend",
+        choices=("mediapipe", "hog"),
+        default="mediapipe",
+    )
     parser.add_argument("--duration", type=float, default=15.0)
-    parser.add_argument("--fps", type=float, default=2.0)
+    parser.add_argument("--fps", type=float, default=5.0)
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--min-confidence", type=float, default=0.2)
+    parser.add_argument("--min-confidence", type=float)
     parser.add_argument("--scale", type=float, default=1.05)
+    parser.add_argument(
+        "--model",
+        type=Path,
+        default=Path(
+            "models/person_detection/person_detection_mediapipe_2023mar.onnx"
+        ),
+    )
+    parser.add_argument(
+        "--model-helper",
+        type=Path,
+        default=Path("models/person_detection/mp_persondet.py"),
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -36,12 +54,21 @@ def detection_status(detection: PersonDetection | None) -> str:
     return detection.position
 
 
+def create_detector(args: argparse.Namespace) -> HogPersonDetector | MediaPipePersonDetector:
+    if args.backend == "hog":
+        confidence = 0.2 if args.min_confidence is None else args.min_confidence
+        return HogPersonDetector(min_confidence=confidence, scale=args.scale)
+    confidence = 0.5 if args.min_confidence is None else args.min_confidence
+    return MediaPipePersonDetector(
+        model_path=args.model,
+        helper_path=args.model_helper,
+        min_confidence=confidence,
+    )
+
+
 def main() -> int:
     args = build_parser().parse_args()
-    detector = HogPersonDetector(
-        min_confidence=args.min_confidence,
-        scale=args.scale,
-    )
+    detector = create_detector(args)
     source = Picamera2FrameSource(width=args.width, height=args.height)
     started_at = time.monotonic()
     last_report_at = 0.0

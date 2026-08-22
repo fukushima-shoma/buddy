@@ -315,8 +315,12 @@ python -m robot.color_follow_cli \
 
 ## 人物検出（モーターなし）
 
-OpenCV標準のHOG検出器で、カメラに映った人物の有無と左右位置を確認する。
-このコマンドはモーターを制御しない。
+OpenCV Zooの軽量MediaPipe人物検出モデルで、カメラに映った人物の有無と左右位置を
+確認する。このコマンドはモーターを制御しない。初回だけモデルを導入する。
+
+```sh
+bash scripts/install_person_model.sh
+```
 
 ```sh
 python3 -m robot.person_cli --duration 30
@@ -330,18 +334,27 @@ person=not-found
 snapshot=captures/person-detected.jpg
 ```
 
-人物の全身がカメラに入り、背景と区別しやすい明るい場所で試す。低いカメラ位置
-では上半身だけになりやすいため、最初はカメラから2〜4mほど離れて立つ。
-処理負荷を抑える既定値は2fps。検出しにくい場合は信頼度の下限を少し下げる。
+人物が背景と区別しやすい明るい場所で試す。既定値は5fps、信頼度0.5。
+検出しにくい場合は信頼度の下限を少し下げる。
 
 ```sh
 python3 -m robot.person_cli \
   --duration 30 \
-  --min-confidence 0.1
+  --min-confidence 0.4
 ```
 
 `--min-confidence`を下げると検出しやすくなるが、家具などの誤検出も増える。
 最後の枠付き画像は`captures/person-detected.jpg`へ保存される。
+
+比較用に従来のHOG全身検出も残している。
+
+```sh
+python3 -m robot.person_cli \
+  --backend hog \
+  --fps 2 \
+  --min-confidence 0.2 \
+  --duration 30
+```
 
 ## GPIOが使用中と表示された場合
 

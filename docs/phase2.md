@@ -137,16 +137,20 @@ python3 -m robot.color_follow_cli \
 
 ## Step 8: 人物を検出
 
-最初はモーターを動かさず、OpenCV標準のHOG検出器で人物の有無と左右位置を確認する。
+最初はモーターを動かさず、OpenCV Zooの軽量MediaPipeモデルで人物の有無と左右位置を
+確認する。初回だけモデルを導入する。
+
+```sh
+bash scripts/install_person_model.sh
+```
 
 ```sh
 python3 -m robot.person_cli --duration 30
 ```
 
-人物の全身が映るように2〜4mほど離れて立ち、`person=detected`と位置が表示される
-ことを確認する。最後の処理画像は`captures/person-detected.jpg`へ保存される。
-HOGは追加モデルなしで試せる基礎実装であり、低いアングルや上半身だけの映像では
-検出しにくい。実機結果を確認してから、より軽量なAIモデルへの移行を判断する。
+`person=detected`と位置が表示されることを確認する。最後の処理画像は
+`captures/person-detected.jpg`へ保存される。従来のHOG版は比較用として
+`--backend hog`で実行できる。
 
 ## Phase2 Checklist
 

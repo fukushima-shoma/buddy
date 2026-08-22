@@ -1,3 +1,4 @@
 captures/
+models/person_detection/
 __pycache__/
 *.py[cod]
