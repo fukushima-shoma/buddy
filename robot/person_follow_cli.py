@@ -55,7 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--person-area-stop-confirm-frames", type=int, default=2)
     parser.add_argument("--person-area-resume-confirm-frames", type=int, default=3)
     parser.add_argument("--distance-mode", choices=(1, 2), type=int, default=2)
-    parser.add_argument("--person-confirm-frames", type=int, default=3)
+    parser.add_argument("--person-confirm-window", type=int, default=3)
+    parser.add_argument("--person-confirm-hits", type=int, default=2)
+    parser.add_argument("--person-confirm-max-shift", type=int, default=160)
     parser.add_argument("--lost-frame-tolerance", type=int, default=1)
     parser.add_argument("--position-window", type=int, default=3)
     parser.add_argument(
@@ -160,7 +162,9 @@ def main() -> int:
     )
     stabilizer = PersonDetectionStabilizer(
         image_width=args.width,
-        confirm_frames=args.person_confirm_frames,
+        confirm_window=args.person_confirm_window,
+        confirm_hits=args.person_confirm_hits,
+        confirm_max_shift=args.person_confirm_max_shift,
         lost_frame_tolerance=args.lost_frame_tolerance,
         position_window=args.position_window,
     )

@@ -88,6 +88,41 @@ class PersonDetectionTest(unittest.TestCase):
         self.assertEqual(retained, detected)
         self.assertIsNone(lost)
 
+    def test_stabilizer_acquires_two_consistent_hits_in_three_frames(self) -> None:
+        stabilizer = PersonDetectionStabilizer(
+            640,
+            confirm_window=3,
+            confirm_hits=2,
+            confirm_max_shift=100,
+        )
+
+        first, first_confirming = stabilizer.update(self.make_detection(300))
+        gap, gap_confirming = stabilizer.update(None)
+        acquired, acquired_confirming = stabilizer.update(
+            self.make_detection(340)
+        )
+
+        self.assertIsNone(first)
+        self.assertTrue(first_confirming)
+        self.assertIsNone(gap)
+        self.assertTrue(gap_confirming)
+        self.assertIsNotNone(acquired)
+        self.assertFalse(acquired_confirming)
+
+    def test_stabilizer_rejects_spatially_inconsistent_hits(self) -> None:
+        stabilizer = PersonDetectionStabilizer(
+            640,
+            confirm_window=3,
+            confirm_hits=2,
+            confirm_max_shift=80,
+        )
+
+        stabilizer.update(self.make_detection(100))
+        acquired, confirming = stabilizer.update(self.make_detection(500))
+
+        self.assertIsNone(acquired)
+        self.assertTrue(confirming)
+
     def test_stabilizer_uses_median_horizontal_position(self) -> None:
         stabilizer = PersonDetectionStabilizer(
             640,

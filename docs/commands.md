@@ -387,7 +387,8 @@ python3 -m robot.person_follow_cli \
 
 誤検出や一時的な値の揺れを抑える既定の安定化:
 
-- 人物を3フレーム連続検出するまで`reason=person-confirming`で停止
+- 直近3フレーム中2回、水平中心差160px以内で人物を検出するまで
+  `reason=person-confirming`で停止
 - 追跡開始後は1フレームだけ未検出を許容
 - 直近3回の人物中心位置の中央値で`left/center/right`を決定
 - 直近3回の距離の中央値で単発の距離スパイクを除外
@@ -400,7 +401,9 @@ python3 -m robot.person_follow_cli \
 ```sh
 python3 -m robot.person_follow_cli \
   --distance-backend vl53l1x \
-  --person-confirm-frames 3 \
+  --person-confirm-window 3 \
+  --person-confirm-hits 2 \
+  --person-confirm-max-shift 160 \
   --lost-frame-tolerance 1 \
   --position-window 3 \
   --distance-window 3 \
@@ -419,6 +422,10 @@ python3 -m robot.person_follow_cli \
 停止を実験する場合だけ正の値を指定する。人物を完全に見失うと面積履歴をリセット
 する。距離の生値は平滑化より先に停止判定へ
 使うため近距離では即停止し、遠距離への単発スパイクでは再開しない。
+
+人物取得は連続検出ではなく、直近3フレーム中2回の多数決を使う。1フレームの姿勢
+変化を許容しつつ、2回の水平中心が160pxより離れている場合は別候補として追跡を
+開始しない。
 
 ## GPIOが使用中と表示された場合
 

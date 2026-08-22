@@ -31,15 +31,25 @@ class PersonDetectionStabilizer:
     def __init__(
         self,
         image_width: int,
-        confirm_frames: int = 2,
+        confirm_frames: int | None = None,
+        confirm_window: int = 3,
+        confirm_hits: int = 2,
+        confirm_max_shift: int = 160,
         lost_frame_tolerance: int = 1,
         position_window: int = 3,
     ) -> None:
         self._image_width = max(1, image_width)
-        self._confirm_frames = max(1, confirm_frames)
+        if confirm_frames is not None:
+            confirm_hits = max(1, confirm_frames)
+            confirm_window = max(confirm_hits, confirm_window)
+        self._confirm_window = max(1, confirm_window)
+        self._confirm_hits = min(max(1, confirm_hits), self._confirm_window)
+        self._confirm_max_shift = max(0, confirm_max_shift)
         self._lost_frame_tolerance = max(0, lost_frame_tolerance)
         self._centers: deque[int] = deque(maxlen=max(1, position_window))
-        self._consecutive_detections = 0
+        self._acquisition: deque[PersonDetection | None] = deque(
+            maxlen=self._confirm_window
+        )
         self._missed_frames = 0
         self._locked = False
         self._last_detection: PersonDetection | None = None
@@ -49,23 +59,33 @@ class PersonDetectionStabilizer:
         detection: PersonDetection | None,
     ) -> tuple[PersonDetection | None, bool]:
         """Return the stable detection and whether acquisition is in progress."""
-        if detection is None:
-            self._consecutive_detections = 0
-            if self._locked and self._last_detection is not None:
+        if self._locked:
+            if detection is None and self._last_detection is not None:
                 self._missed_frames += 1
                 if self._missed_frames <= self._lost_frame_tolerance:
                     return self._last_detection, False
-            self._reset()
-            return None, False
+                self._reset()
+                return None, False
+            if detection is None:
+                self._reset()
+                return None, False
+            self._missed_frames = 0
+            return self._stable_detection(detection), False
 
-        self._missed_frames = 0
-        self._consecutive_detections += 1
-        self._centers.append(detection.center_x)
-        self._last_detection = detection
-        if not self._locked and self._consecutive_detections < self._confirm_frames:
-            return None, True
+        self._acquisition.append(detection)
+        candidates = [item for item in self._acquisition if item is not None]
+        consistent = self._largest_consistent_group(candidates)
+        if len(consistent) < self._confirm_hits:
+            return None, bool(candidates)
 
         self._locked = True
+        self._missed_frames = 0
+        self._centers.extend(item.center_x for item in consistent)
+        newest = consistent[-1]
+        return self._stable_detection(newest), False
+
+    def _stable_detection(self, detection: PersonDetection) -> PersonDetection:
+        self._centers.append(detection.center_x)
         sorted_centers = sorted(self._centers)
         center_x = sorted_centers[len(sorted_centers) // 2]
         stable = PersonDetection(
@@ -79,13 +99,30 @@ class PersonDetectionStabilizer:
             position=horizontal_position(center_x, self._image_width),
         )
         self._last_detection = stable
-        return stable, False
+        return stable
+
+    def _largest_consistent_group(
+        self,
+        candidates: list[PersonDetection],
+    ) -> list[PersonDetection]:
+        best: list[PersonDetection] = []
+        for anchor in candidates:
+            group = [
+                candidate
+                for candidate in candidates
+                if abs(candidate.center_x - anchor.center_x)
+                <= self._confirm_max_shift
+            ]
+            if len(group) >= len(best):
+                best = group
+        return best
 
     def _reset(self) -> None:
         self._locked = False
         self._missed_frames = 0
         self._last_detection = None
         self._centers.clear()
+        self._acquisition.clear()
 
 
 class PersonAreaLatch:
