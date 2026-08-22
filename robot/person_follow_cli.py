@@ -14,6 +14,7 @@ from robot.distance import (
 from robot.person_detection import (
     HogPersonDetector,
     MediaPipePersonDetector,
+    PersonAreaLatch,
     PersonDetection,
     PersonDetectionStabilizer,
     save_annotated_image,
@@ -47,6 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume-distance", type=float, default=70.0)
     parser.add_argument("--resume-confirm-frames", type=int, default=5)
     parser.add_argument("--stop-person-area", type=float, default=180000.0)
+    parser.add_argument("--resume-person-area", type=float, default=140000.0)
+    parser.add_argument("--person-area-window", type=int, default=3)
+    parser.add_argument("--person-area-stop-confirm-frames", type=int, default=2)
+    parser.add_argument("--person-area-resume-confirm-frames", type=int, default=3)
     parser.add_argument("--distance-mode", choices=(1, 2), type=int, default=2)
     parser.add_argument("--person-confirm-frames", type=int, default=2)
     parser.add_argument("--lost-frame-tolerance", type=int, default=1)
@@ -84,7 +89,7 @@ def person_tracking_decision(
     distance_required: bool,
     obstacle_latched: bool,
     person_confirming: bool = False,
-    stop_person_area: float = 180000.0,
+    person_too_close: bool = False,
 ) -> tuple[str, str]:
     if distance_required and distance_cm is None:
         return "stop", "distance-not-ready"
@@ -94,10 +99,7 @@ def person_tracking_decision(
         if person_confirming:
             return "stop", "person-confirming"
         return "stop", "not-found"
-    if (
-        stop_person_area > 0
-        and detection.width * detection.height >= stop_person_area
-    ):
+    if person_too_close:
         return "stop", "person-too-close"
     if detection.position in ("left", "right"):
         return detection.position, "tracking"
@@ -152,6 +154,13 @@ def main() -> int:
         lost_frame_tolerance=args.lost_frame_tolerance,
         position_window=args.position_window,
     )
+    person_area_latch = PersonAreaLatch(
+        stop_area=args.stop_person_area,
+        resume_area=args.resume_person_area,
+        window_size=args.person_area_window,
+        stop_confirm_frames=args.person_area_stop_confirm_frames,
+        resume_confirm_frames=args.person_area_resume_confirm_frames,
+    )
     frame_interval = 1.0 / max(0.1, args.fps)
 
     print(
@@ -166,6 +175,9 @@ def main() -> int:
             frame = source.capture_array()
             measured_detection, last_annotated = detector.detect(frame)
             detection, person_confirming = stabilizer.update(measured_detection)
+            person_too_close, filtered_person_area = person_area_latch.update(
+                detection
+            )
             measured_distance_cm = distance_sensor.read_distance_cm()
             filtered_distance_cm, recent_distances_cm = update_distance_median(
                 measured_distance_cm,
@@ -190,7 +202,7 @@ def main() -> int:
                 distance_required=True,
                 obstacle_latched=obstacle_latched,
                 person_confirming=person_confirming,
-                stop_person_area=args.stop_person_area,
+                person_too_close=person_too_close,
             )
             if person_confirming:
                 position = "confirming"
@@ -206,19 +218,30 @@ def main() -> int:
                     if reported_detection is None
                     else f"{reported_detection.confidence:.2f}"
                 )
-                person_area = (
+                raw_person_area = (
                     0
                     if reported_detection is None
                     else reported_detection.width * reported_detection.height
+                )
+                person_area_text = (
+                    "not-ready"
+                    if filtered_person_area is None
+                    else f"{filtered_person_area:.0f}"
                 )
                 distance_text = (
                     "not-ready"
                     if distance_cm is None
                     else f"{distance_cm:.1f}cm"
                 )
+                raw_distance_text = (
+                    "not-ready"
+                    if measured_distance_cm is None
+                    else f"{measured_distance_cm:.1f}cm"
+                )
                 print(
                     f"person={position} action={action} reason={reason} "
-                    f"confidence={confidence} area={person_area} "
+                    f"confidence={confidence} raw-area={raw_person_area} "
+                    f"area={person_area_text} raw-distance={raw_distance_text} "
                     f"distance={distance_text}",
                     flush=True,
                 )

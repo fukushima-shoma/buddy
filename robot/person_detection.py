@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from collections import deque
 import importlib.util
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 from robot.color_detection import horizontal_position
@@ -82,6 +83,58 @@ class PersonDetectionStabilizer:
         self._missed_frames = 0
         self._last_detection = None
         self._centers.clear()
+
+
+class PersonAreaLatch:
+    """Smooth and latch visual proximity without reacting to one bad box."""
+
+    def __init__(
+        self,
+        stop_area: float = 180000.0,
+        resume_area: float = 140000.0,
+        window_size: int = 3,
+        stop_confirm_frames: int = 2,
+        resume_confirm_frames: int = 3,
+    ) -> None:
+        self.stop_area = max(0.0, stop_area)
+        self.resume_area = min(self.stop_area, max(0.0, resume_area))
+        self.stop_confirm_frames = max(1, stop_confirm_frames)
+        self.resume_confirm_frames = max(1, resume_confirm_frames)
+        self._areas: deque[float] = deque(maxlen=max(1, window_size))
+        self._stop_frames = 0
+        self._resume_frames = 0
+        self.latched = False
+
+    def update(
+        self,
+        detection: PersonDetection | None,
+    ) -> tuple[bool, float | None]:
+        if self.stop_area <= 0:
+            self.latched = False
+            return False, None
+        if detection is None:
+            return self.latched, None
+
+        self._areas.append(float(detection.width * detection.height))
+        filtered_area = float(median(self._areas))
+        if not self.latched:
+            if filtered_area >= self.stop_area:
+                self._stop_frames += 1
+                if self._stop_frames >= self.stop_confirm_frames:
+                    self.latched = True
+                    self._stop_frames = 0
+            else:
+                self._stop_frames = 0
+            return self.latched, filtered_area
+
+        if filtered_area <= self.resume_area:
+            self._resume_frames += 1
+            if self._resume_frames >= self.resume_confirm_frames:
+                self.latched = False
+                self._resume_frames = 0
+        else:
+            self._resume_frames = 0
+        return self.latched, filtered_area
 
 
 def select_person_detection(

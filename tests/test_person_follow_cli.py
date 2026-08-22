@@ -83,6 +83,10 @@ class PersonFollowCliTest(unittest.TestCase):
         self.assertEqual(args.resume_distance, 70.0)
         self.assertEqual(args.resume_confirm_frames, 5)
         self.assertEqual(args.stop_person_area, 180000.0)
+        self.assertEqual(args.resume_person_area, 140000.0)
+        self.assertEqual(args.person_area_window, 3)
+        self.assertEqual(args.person_area_stop_confirm_frames, 2)
+        self.assertEqual(args.person_area_resume_confirm_frames, 3)
         self.assertEqual(args.distance_window, 3)
         self.assertEqual(args.person_confirm_frames, 2)
         self.assertEqual(args.lost_frame_tolerance, 1)
@@ -119,7 +123,7 @@ class PersonFollowCliTest(unittest.TestCase):
                 100.0,
                 distance_required=True,
                 obstacle_latched=False,
-                stop_person_area=180000.0,
+                person_too_close=True,
             ),
             ("stop", "person-too-close"),
         )

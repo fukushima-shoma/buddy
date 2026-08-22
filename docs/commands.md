@@ -393,7 +393,9 @@ python3 -m robot.person_follow_cli \
 - 直近3回の距離の中央値で単発の距離スパイクを除外
 - 生の距離が60cm以下なら中央値を待たず即座に停止
 - 停止解除は70cm以上を5フレーム連続確認してから実行
-- 人物枠の面積が180000以上なら`reason=person-too-close`で補助停止
+- 人物枠は直近3回の面積中央値を使用
+- 面積中央値が180000以上で2回連続したら`reason=person-too-close`で補助停止
+- 面積中央値が140000以下で3回連続するまで画像による停止を保持
 
 必要な場合は次のオプションで変更できる。
 
@@ -406,12 +408,18 @@ python3 -m robot.person_follow_cli \
   --distance-window 3 \
   --resume-confirm-frames 5 \
   --stop-person-area 180000 \
+  --resume-person-area 140000 \
+  --person-area-window 3 \
+  --person-area-stop-confirm-frames 2 \
+  --person-area-resume-confirm-frames 3 \
   --duration 30
 ```
 
-ログの`area`はMediaPipeが推定した人物枠の面積。環境に合わせて補助停止値を調整
-でき、`--stop-person-area 0`で無効化できる。距離の生値は平滑化より先に停止判定へ
-使うため近距離では即停止し、遠距離への単発スパイクでは再開しない。
+ログの`raw-area`と`raw-distance`は現在フレームの生値、`area`と`distance`は中央値
+などの安定化後の値。MediaPipeが推定した人物枠は姿勢で変動するため、停止と解除に
+異なる値と連続確認を使う。環境に合わせて調整でき、`--stop-person-area 0`で画像の
+補助停止を無効化できる。距離の生値は平滑化より先に停止判定へ使うため近距離では
+即停止し、遠距離への単発スパイクでは再開しない。
 
 ## GPIOが使用中と表示された場合
 

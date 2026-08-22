@@ -2,6 +2,7 @@ import unittest
 
 from robot.person_detection import (
     PersonDetection,
+    PersonAreaLatch,
     PersonDetectionStabilizer,
     mediapipe_result_to_detection,
     select_person_detection,
@@ -96,3 +97,39 @@ class PersonDetectionTest(unittest.TestCase):
         assert stable is not None
         self.assertEqual(stable.center_x, 320)
         self.assertEqual(stable.position, "center")
+
+    def test_person_area_latch_ignores_one_large_box(self) -> None:
+        latch = PersonAreaLatch(
+            stop_area=180000.0,
+            resume_area=140000.0,
+            window_size=3,
+            stop_confirm_frames=2,
+        )
+
+        latched, _ = latch.update(self.make_detection(320))
+        large = PersonDetection(
+            **{**self.make_detection(320).__dict__, "width": 500, "height": 400}
+        )
+        latched_after_spike, filtered = latch.update(large)
+
+        self.assertFalse(latched)
+        self.assertFalse(latched_after_spike)
+        self.assertLess(filtered, 180000.0)
+
+    def test_person_area_latch_confirms_stop_and_release(self) -> None:
+        latch = PersonAreaLatch(
+            stop_area=180000.0,
+            resume_area=140000.0,
+            window_size=1,
+            stop_confirm_frames=2,
+            resume_confirm_frames=2,
+        )
+        large = PersonDetection(
+            **{**self.make_detection(320).__dict__, "width": 500, "height": 400}
+        )
+        small = self.make_detection(320)
+
+        self.assertFalse(latch.update(large)[0])
+        self.assertTrue(latch.update(large)[0])
+        self.assertTrue(latch.update(small)[0])
+        self.assertFalse(latch.update(small)[0])
