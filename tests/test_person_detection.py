@@ -1,6 +1,8 @@
 import unittest
 
 from robot.person_detection import (
+    HOG_DEFAULT_CONFIDENCE,
+    MEDIAPIPE_DEFAULT_CONFIDENCE,
     PersonDetection,
     PersonAreaLatch,
     PersonDetectionStabilizer,
@@ -10,6 +12,10 @@ from robot.person_detection import (
 
 
 class PersonDetectionTest(unittest.TestCase):
+    def test_calibrated_default_confidences_are_explicit(self) -> None:
+        self.assertEqual(MEDIAPIPE_DEFAULT_CONFIDENCE, 0.45)
+        self.assertEqual(HOG_DEFAULT_CONFIDENCE, 0.2)
+
     def make_detection(self, center_x: int) -> PersonDetection:
         return PersonDetection(
             confidence=0.8,
@@ -140,4 +146,16 @@ class PersonDetectionTest(unittest.TestCase):
         latched, filtered = latch.update(self.make_detection(320))
 
         self.assertFalse(latched)
+        self.assertEqual(filtered, 28000.0)
+
+    def test_person_area_history_resets_after_person_is_lost(self) -> None:
+        latch = PersonAreaLatch(stop_area=0, window_size=3)
+        large = PersonDetection(
+            **{**self.make_detection(320).__dict__, "width": 500, "height": 400}
+        )
+        latch.update(large)
+        latch.update(None)
+
+        _, filtered = latch.update(self.make_detection(320))
+
         self.assertEqual(filtered, 28000.0)

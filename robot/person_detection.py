@@ -9,6 +9,9 @@ from typing import Any
 
 from robot.color_detection import horizontal_position
 
+MEDIAPIPE_DEFAULT_CONFIDENCE = 0.45
+HOG_DEFAULT_CONFIDENCE = 0.2
+
 
 @dataclass(frozen=True)
 class PersonDetection:
@@ -110,6 +113,9 @@ class PersonAreaLatch:
         detection: PersonDetection | None,
     ) -> tuple[bool, float | None]:
         if detection is None:
+            self._areas.clear()
+            self._stop_frames = 0
+            self._resume_frames = 0
             return self.latched, None
 
         self._areas.append(float(detection.width * detection.height))

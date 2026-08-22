@@ -6,6 +6,8 @@ import time
 
 from robot.person_detection import (
     HogPersonDetector,
+    HOG_DEFAULT_CONFIDENCE,
+    MEDIAPIPE_DEFAULT_CONFIDENCE,
     MediaPipePersonDetector,
     PersonDetection,
     save_annotated_image,
@@ -56,9 +58,17 @@ def detection_status(detection: PersonDetection | None) -> str:
 
 def create_detector(args: argparse.Namespace) -> HogPersonDetector | MediaPipePersonDetector:
     if args.backend == "hog":
-        confidence = 0.2 if args.min_confidence is None else args.min_confidence
+        confidence = (
+            HOG_DEFAULT_CONFIDENCE
+            if args.min_confidence is None
+            else args.min_confidence
+        )
         return HogPersonDetector(min_confidence=confidence, scale=args.scale)
-    confidence = 0.5 if args.min_confidence is None else args.min_confidence
+    confidence = (
+        MEDIAPIPE_DEFAULT_CONFIDENCE
+        if args.min_confidence is None
+        else args.min_confidence
+    )
     return MediaPipePersonDetector(
         model_path=args.model,
         helper_path=args.model_helper,
