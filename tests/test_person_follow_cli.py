@@ -81,6 +81,8 @@ class PersonFollowCliTest(unittest.TestCase):
         self.assertEqual(args.distance_backend, "mock")
         self.assertEqual(args.stop_distance, 60.0)
         self.assertEqual(args.resume_distance, 70.0)
+        self.assertEqual(args.resume_confirm_frames, 5)
+        self.assertEqual(args.stop_person_area, 180000.0)
         self.assertEqual(args.distance_window, 3)
         self.assertEqual(args.person_confirm_frames, 2)
         self.assertEqual(args.lost_frame_tolerance, 1)
@@ -97,6 +99,29 @@ class PersonFollowCliTest(unittest.TestCase):
                 person_confirming=True,
             ),
             ("stop", "person-confirming"),
+        )
+
+    def test_large_person_detection_stops_as_visual_fallback(self) -> None:
+        close_person = PersonDetection(
+            confidence=0.9,
+            center_x=320,
+            center_y=240,
+            x=70,
+            y=40,
+            width=500,
+            height=400,
+            position="center",
+        )
+
+        self.assertEqual(
+            person_tracking_decision(
+                close_person,
+                100.0,
+                distance_required=True,
+                obstacle_latched=False,
+                stop_person_area=180000.0,
+            ),
+            ("stop", "person-too-close"),
         )
 
 

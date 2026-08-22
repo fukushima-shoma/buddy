@@ -7,9 +7,9 @@ import time
 from robot.distance import (
     DistanceSensor,
     MockDistanceSensor,
+    ObstacleLatch,
     retain_recent_distance,
     update_distance_median,
-    update_obstacle_latch,
 )
 from robot.person_detection import (
     HogPersonDetector,
@@ -45,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--distance-window", type=int, default=3)
     parser.add_argument("--stop-distance", type=float, default=60.0)
     parser.add_argument("--resume-distance", type=float, default=70.0)
+    parser.add_argument("--resume-confirm-frames", type=int, default=5)
+    parser.add_argument("--stop-person-area", type=float, default=180000.0)
     parser.add_argument("--distance-mode", choices=(1, 2), type=int, default=2)
     parser.add_argument("--person-confirm-frames", type=int, default=2)
     parser.add_argument("--lost-frame-tolerance", type=int, default=1)
@@ -82,6 +84,7 @@ def person_tracking_decision(
     distance_required: bool,
     obstacle_latched: bool,
     person_confirming: bool = False,
+    stop_person_area: float = 180000.0,
 ) -> tuple[str, str]:
     if distance_required and distance_cm is None:
         return "stop", "distance-not-ready"
@@ -91,6 +94,11 @@ def person_tracking_decision(
         if person_confirming:
             return "stop", "person-confirming"
         return "stop", "not-found"
+    if (
+        stop_person_area > 0
+        and detection.width * detection.height >= stop_person_area
+    ):
+        return "stop", "person-too-close"
     if detection.position in ("left", "right"):
         return detection.position, "tracking"
     return "forward", "tracking"
@@ -133,7 +141,11 @@ def main() -> int:
     last_distance_cm: float | None = None
     last_distance_at: float | None = None
     recent_distances_cm: tuple[float, ...] = ()
-    obstacle_latched = False
+    obstacle_latch = ObstacleLatch(
+        stop_distance_cm=args.stop_distance,
+        resume_distance_cm=args.resume_distance,
+        resume_confirm_frames=args.resume_confirm_frames,
+    )
     stabilizer = PersonDetectionStabilizer(
         image_width=args.width,
         confirm_frames=args.person_confirm_frames,
@@ -168,11 +180,9 @@ def main() -> int:
             )
             if distance_cm is not None:
                 last_distance_cm = distance_cm
-            obstacle_latched = update_obstacle_latch(
+            obstacle_latched = obstacle_latch.update(
                 distance_cm,
-                args.stop_distance,
-                args.resume_distance,
-                obstacle_latched,
+                raw_distance_cm=measured_distance_cm,
             )
             action, reason = person_tracking_decision(
                 detection,
@@ -180,15 +190,26 @@ def main() -> int:
                 distance_required=True,
                 obstacle_latched=obstacle_latched,
                 person_confirming=person_confirming,
+                stop_person_area=args.stop_person_area,
             )
-            position = "not-found" if detection is None else detection.position
+            if person_confirming:
+                position = "confirming"
+                reported_detection = measured_detection
+            else:
+                position = "not-found" if detection is None else detection.position
+                reported_detection = detection
             status = (action, reason, position)
             now = time.monotonic()
             if status != last_status or now - last_report_at >= 1.0:
                 confidence = (
                     "not-found"
-                    if detection is None
-                    else f"{detection.confidence:.2f}"
+                    if reported_detection is None
+                    else f"{reported_detection.confidence:.2f}"
+                )
+                person_area = (
+                    0
+                    if reported_detection is None
+                    else reported_detection.width * reported_detection.height
                 )
                 distance_text = (
                     "not-ready"
@@ -197,7 +218,8 @@ def main() -> int:
                 )
                 print(
                     f"person={position} action={action} reason={reason} "
-                    f"confidence={confidence} distance={distance_text}",
+                    f"confidence={confidence} area={person_area} "
+                    f"distance={distance_text}",
                     flush=True,
                 )
                 last_status = status

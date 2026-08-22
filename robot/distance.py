@@ -15,6 +15,56 @@ class DistanceSensor(Protocol):
         """Stop measurements and release resources."""
 
 
+class ObstacleLatch:
+    """Fail-safe obstacle latch with immediate stop and confirmed release."""
+
+    def __init__(
+        self,
+        stop_distance_cm: float,
+        resume_distance_cm: float,
+        resume_confirm_frames: int = 5,
+    ) -> None:
+        self.stop_distance_cm = max(0.0, stop_distance_cm)
+        self.resume_distance_cm = max(
+            self.stop_distance_cm,
+            resume_distance_cm,
+        )
+        self.resume_confirm_frames = max(1, resume_confirm_frames)
+        self.latched = False
+        self._clear_frames = 0
+
+    def update(
+        self,
+        filtered_distance_cm: float | None,
+        raw_distance_cm: float | None = None,
+    ) -> bool:
+        if raw_distance_cm is not None and raw_distance_cm <= self.stop_distance_cm:
+            self.latched = True
+            self._clear_frames = 0
+            return True
+
+        if not self.latched:
+            if (
+                filtered_distance_cm is not None
+                and filtered_distance_cm <= self.stop_distance_cm
+            ):
+                self.latched = True
+                self._clear_frames = 0
+            return self.latched
+
+        if (
+            filtered_distance_cm is not None
+            and filtered_distance_cm >= self.resume_distance_cm
+        ):
+            self._clear_frames += 1
+            if self._clear_frames >= self.resume_confirm_frames:
+                self.latched = False
+                self._clear_frames = 0
+        else:
+            self._clear_frames = 0
+        return self.latched
+
+
 def obstacle_detected(distance_cm: float | None, stop_distance_cm: float) -> bool:
     if distance_cm is None:
         return False

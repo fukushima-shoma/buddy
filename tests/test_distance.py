@@ -2,6 +2,7 @@ import unittest
 
 from robot.distance import (
     MockDistanceSensor,
+    ObstacleLatch,
     obstacle_detected,
     retain_recent_distance,
     update_distance_median,
@@ -50,6 +51,21 @@ class DistanceTest(unittest.TestCase):
 
         self.assertEqual(filtered, 100.0)
         self.assertEqual(updated, (100.0, 102.0, 20.0))
+
+    def test_obstacle_latch_stops_immediately_on_raw_close_reading(self) -> None:
+        latch = ObstacleLatch(60.0, 70.0, resume_confirm_frames=3)
+
+        self.assertTrue(latch.update(100.0, raw_distance_cm=20.0))
+
+    def test_obstacle_latch_requires_consecutive_clear_readings(self) -> None:
+        latch = ObstacleLatch(60.0, 70.0, resume_confirm_frames=3)
+        latch.update(50.0, raw_distance_cm=50.0)
+
+        self.assertTrue(latch.update(80.0, raw_distance_cm=80.0))
+        self.assertTrue(latch.update(65.0, raw_distance_cm=65.0))
+        self.assertTrue(latch.update(80.0, raw_distance_cm=80.0))
+        self.assertTrue(latch.update(80.0, raw_distance_cm=80.0))
+        self.assertFalse(latch.update(80.0, raw_distance_cm=80.0))
 
 
 if __name__ == "__main__":

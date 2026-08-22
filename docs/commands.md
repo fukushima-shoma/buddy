@@ -391,6 +391,9 @@ python3 -m robot.person_follow_cli \
 - 追跡開始後は1フレームだけ未検出を許容
 - 直近3回の人物中心位置の中央値で`left/center/right`を決定
 - 直近3回の距離の中央値で単発の距離スパイクを除外
+- 生の距離が60cm以下なら中央値を待たず即座に停止
+- 停止解除は70cm以上を5フレーム連続確認してから実行
+- 人物枠の面積が180000以上なら`reason=person-too-close`で補助停止
 
 必要な場合は次のオプションで変更できる。
 
@@ -401,11 +404,14 @@ python3 -m robot.person_follow_cli \
   --lost-frame-tolerance 1 \
   --position-window 3 \
   --distance-window 3 \
+  --resume-confirm-frames 5 \
+  --stop-person-area 180000 \
   --duration 30
 ```
 
-距離の中央値処理により、実際の障害物停止は最大で数フレーム遅れる可能性がある。
-停止距離には十分な余裕を持たせる。
+ログの`area`はMediaPipeが推定した人物枠の面積。環境に合わせて補助停止値を調整
+でき、`--stop-person-area 0`で無効化できる。距離の生値は平滑化より先に停止判定へ
+使うため近距離では即停止し、遠距離への単発スパイクでは再開しない。
 
 ## GPIOが使用中と表示された場合
 
