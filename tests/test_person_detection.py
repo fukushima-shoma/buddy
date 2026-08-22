@@ -1,12 +1,26 @@
 import unittest
 
 from robot.person_detection import (
+    PersonDetection,
+    PersonDetectionStabilizer,
     mediapipe_result_to_detection,
     select_person_detection,
 )
 
 
 class PersonDetectionTest(unittest.TestCase):
+    def make_detection(self, center_x: int) -> PersonDetection:
+        return PersonDetection(
+            confidence=0.8,
+            center_x=center_x,
+            center_y=240,
+            x=center_x - 50,
+            y=100,
+            width=100,
+            height=280,
+            position="center",
+        )
+
     def test_selects_highest_confidence_person(self) -> None:
         detection = select_person_detection(
             [
@@ -41,3 +55,44 @@ class PersonDetectionTest(unittest.TestCase):
         self.assertEqual((detection.x, detection.y), (120, 40))
         self.assertEqual((detection.width, detection.height), (400, 400))
         self.assertEqual(detection.confidence, 0.9)
+
+    def test_stabilizer_requires_two_consecutive_detections(self) -> None:
+        stabilizer = PersonDetectionStabilizer(640, confirm_frames=2)
+
+        first, confirming = stabilizer.update(self.make_detection(320))
+        second, confirmed = stabilizer.update(self.make_detection(322))
+
+        self.assertIsNone(first)
+        self.assertTrue(confirming)
+        self.assertIsNotNone(second)
+        self.assertFalse(confirmed)
+
+    def test_stabilizer_tolerates_one_missed_frame(self) -> None:
+        stabilizer = PersonDetectionStabilizer(
+            640,
+            confirm_frames=1,
+            lost_frame_tolerance=1,
+        )
+        detected, _ = stabilizer.update(self.make_detection(320))
+
+        retained, _ = stabilizer.update(None)
+        lost, _ = stabilizer.update(None)
+
+        self.assertEqual(retained, detected)
+        self.assertIsNone(lost)
+
+    def test_stabilizer_uses_median_horizontal_position(self) -> None:
+        stabilizer = PersonDetectionStabilizer(
+            640,
+            confirm_frames=1,
+            position_window=3,
+        )
+        stabilizer.update(self.make_detection(100))
+        stabilizer.update(self.make_detection(540))
+
+        stable, _ = stabilizer.update(self.make_detection(320))
+
+        self.assertIsNotNone(stable)
+        assert stable is not None
+        self.assertEqual(stable.center_x, 320)
+        self.assertEqual(stable.position, "center")

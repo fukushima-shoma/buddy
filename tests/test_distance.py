@@ -4,6 +4,7 @@ from robot.distance import (
     MockDistanceSensor,
     obstacle_detected,
     retain_recent_distance,
+    update_distance_median,
     update_obstacle_latch,
 )
 from robot.distance_cli import build_parser, create_sensor
@@ -41,6 +42,14 @@ class DistanceTest(unittest.TestCase):
         self.assertTrue(update_obstacle_latch(59.0, 60.0, 70.0, False))
         self.assertTrue(update_obstacle_latch(65.0, 60.0, 70.0, True))
         self.assertFalse(update_obstacle_latch(70.0, 60.0, 70.0, True))
+
+    def test_distance_median_rejects_single_spike(self) -> None:
+        readings = (100.0, 102.0)
+
+        filtered, updated = update_distance_median(20.0, readings, 3)
+
+        self.assertEqual(filtered, 100.0)
+        self.assertEqual(updated, (100.0, 102.0, 20.0))
 
 
 if __name__ == "__main__":

@@ -385,6 +385,28 @@ python3 -m robot.person_follow_cli \
 停止を保持する。距離がまだ取得できない場合も`reason=distance-not-ready`で停止する。
 最後の枠付き画像は`captures/person-follow.jpg`へ保存される。
 
+誤検出や一時的な値の揺れを抑える既定の安定化:
+
+- 人物を2フレーム連続検出するまで`reason=person-confirming`で停止
+- 追跡開始後は1フレームだけ未検出を許容
+- 直近3回の人物中心位置の中央値で`left/center/right`を決定
+- 直近3回の距離の中央値で単発の距離スパイクを除外
+
+必要な場合は次のオプションで変更できる。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --distance-backend vl53l1x \
+  --person-confirm-frames 2 \
+  --lost-frame-tolerance 1 \
+  --position-window 3 \
+  --distance-window 3 \
+  --duration 30
+```
+
+距離の中央値処理により、実際の障害物停止は最大で数フレーム遅れる可能性がある。
+停止距離には十分な余裕を持たせる。
+
 ## GPIOが使用中と表示された場合
 
 `GPIO busy`は、別のプログラムがGPIOを使用している状態を表す。

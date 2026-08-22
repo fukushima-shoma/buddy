@@ -81,7 +81,23 @@ class PersonFollowCliTest(unittest.TestCase):
         self.assertEqual(args.distance_backend, "mock")
         self.assertEqual(args.stop_distance, 60.0)
         self.assertEqual(args.resume_distance, 70.0)
+        self.assertEqual(args.distance_window, 3)
+        self.assertEqual(args.person_confirm_frames, 2)
+        self.assertEqual(args.lost_frame_tolerance, 1)
+        self.assertEqual(args.position_window, 3)
         self.assertEqual(create_distance_sensor(args).read_distance_cm(), 100.0)
+
+    def test_unconfirmed_person_stops_safely(self) -> None:
+        self.assertEqual(
+            person_tracking_decision(
+                None,
+                100.0,
+                distance_required=True,
+                obstacle_latched=False,
+                person_confirming=True,
+            ),
+            ("stop", "person-confirming"),
+        )
 
 
 if __name__ == "__main__":

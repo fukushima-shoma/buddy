@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from statistics import median
 from typing import Protocol
 
 
@@ -53,6 +54,19 @@ def update_obstacle_latch(
     if obstacle_latched:
         return distance_cm < resume_distance_cm
     return distance_cm <= stop_distance_cm
+
+
+def update_distance_median(
+    measured_distance_cm: float | None,
+    recent_distances_cm: tuple[float, ...],
+    window_size: int = 3,
+) -> tuple[float | None, tuple[float, ...]]:
+    """Filter isolated distance spikes with a short rolling median."""
+    if measured_distance_cm is None:
+        return None, recent_distances_cm
+    window_size = max(1, window_size)
+    updated = (*recent_distances_cm, float(measured_distance_cm))[-window_size:]
+    return float(median(updated)), updated
 
 
 class MockDistanceSensor:

@@ -8,12 +8,14 @@ from robot.distance import (
     DistanceSensor,
     MockDistanceSensor,
     retain_recent_distance,
+    update_distance_median,
     update_obstacle_latch,
 )
 from robot.person_detection import (
     HogPersonDetector,
     MediaPipePersonDetector,
     PersonDetection,
+    PersonDetectionStabilizer,
     save_annotated_image,
 )
 from robot.picamera2_driver import Picamera2FrameSource
@@ -40,9 +42,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-confidence", type=float)
     parser.add_argument("--scale", type=float, default=1.05)
     parser.add_argument("--mock-distance", type=float, default=100.0)
+    parser.add_argument("--distance-window", type=int, default=3)
     parser.add_argument("--stop-distance", type=float, default=60.0)
     parser.add_argument("--resume-distance", type=float, default=70.0)
     parser.add_argument("--distance-mode", choices=(1, 2), type=int, default=2)
+    parser.add_argument("--person-confirm-frames", type=int, default=2)
+    parser.add_argument("--lost-frame-tolerance", type=int, default=1)
+    parser.add_argument("--position-window", type=int, default=3)
     parser.add_argument(
         "--timing-budget",
         choices=(20, 33, 50, 100, 200, 500),
@@ -75,12 +81,15 @@ def person_tracking_decision(
     *,
     distance_required: bool,
     obstacle_latched: bool,
+    person_confirming: bool = False,
 ) -> tuple[str, str]:
     if distance_required and distance_cm is None:
         return "stop", "distance-not-ready"
     if distance_required and obstacle_latched:
         return "stop", "obstacle"
     if detection is None:
+        if person_confirming:
+            return "stop", "person-confirming"
         return "stop", "not-found"
     if detection.position in ("left", "right"):
         return detection.position, "tracking"
@@ -123,7 +132,14 @@ def main() -> int:
     last_annotated = None
     last_distance_cm: float | None = None
     last_distance_at: float | None = None
+    recent_distances_cm: tuple[float, ...] = ()
     obstacle_latched = False
+    stabilizer = PersonDetectionStabilizer(
+        image_width=args.width,
+        confirm_frames=args.person_confirm_frames,
+        lost_frame_tolerance=args.lost_frame_tolerance,
+        position_window=args.position_window,
+    )
     frame_interval = 1.0 / max(0.1, args.fps)
 
     print(
@@ -136,10 +152,16 @@ def main() -> int:
         while args.duration <= 0 or time.monotonic() - started_at < args.duration:
             frame_started_at = time.monotonic()
             frame = source.capture_array()
-            detection, last_annotated = detector.detect(frame)
+            measured_detection, last_annotated = detector.detect(frame)
+            detection, person_confirming = stabilizer.update(measured_detection)
             measured_distance_cm = distance_sensor.read_distance_cm()
-            distance_cm, last_distance_at = retain_recent_distance(
+            filtered_distance_cm, recent_distances_cm = update_distance_median(
                 measured_distance_cm,
+                recent_distances_cm,
+                args.distance_window,
+            )
+            distance_cm, last_distance_at = retain_recent_distance(
+                filtered_distance_cm,
                 last_distance_cm,
                 last_distance_at,
                 time.monotonic(),
@@ -157,6 +179,7 @@ def main() -> int:
                 distance_cm,
                 distance_required=True,
                 obstacle_latched=obstacle_latched,
+                person_confirming=person_confirming,
             )
             position = "not-found" if detection is None else detection.position
             status = (action, reason, position)
