@@ -22,11 +22,19 @@ from robot.person_detection import (
     save_annotated_image,
 )
 from robot.picamera2_driver import Picamera2FrameSource
+from robot.motor import BuddyDrive, MotorCommand
+from robot.motor_cli import create_driver
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Combine person and distance detection without moving motors."
+        description="Follow a person with distance-based safety stops."
+    )
+    parser.add_argument(
+        "--backend",
+        choices=("mock", "gpiozero"),
+        default="mock",
+        help="Motor backend. gpiozero must only be used with raised wheels first.",
     )
     parser.add_argument(
         "--person-backend",
@@ -60,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--person-confirm-max-shift", type=int, default=160)
     parser.add_argument("--lost-frame-tolerance", type=int, default=1)
     parser.add_argument("--position-window", type=int, default=3)
+    parser.add_argument("--speed", type=float, default=1.0)
+    parser.add_argument("--turn-speed", type=float, default=1.0)
+    parser.add_argument("--turn-pulse", type=float, default=0.08)
+    parser.add_argument("--max-speed", type=float, default=1.0)
+    parser.add_argument("--left-scale", type=float, default=0.95)
+    parser.add_argument("--right-scale", type=float, default=1.0)
     parser.add_argument(
         "--timing-budget",
         choices=(20, 33, 50, 100, 200, 500),
@@ -110,6 +124,21 @@ def person_tracking_decision(
     return "forward", "tracking"
 
 
+def apply_person_action(
+    drive: BuddyDrive,
+    action: str,
+    speed: float,
+    turn_speed: float,
+) -> MotorCommand:
+    if action == "stop":
+        return drive.stop()
+    if action == "forward":
+        return drive.forward(speed)
+    if action in ("left", "right"):
+        return getattr(drive, action)(turn_speed)
+    raise ValueError(f"Unsupported person tracking action: {action}")
+
+
 def create_person_detector(
     args: argparse.Namespace,
 ) -> HogPersonDetector | MediaPipePersonDetector:
@@ -148,6 +177,13 @@ def main() -> int:
     detector = create_person_detector(args)
     distance_sensor = create_distance_sensor(args)
     source = Picamera2FrameSource(width=args.width, height=args.height)
+    driver = create_driver(args.backend)
+    drive = BuddyDrive(
+        driver,
+        max_speed=args.max_speed,
+        left_scale=args.left_scale,
+        right_scale=args.right_scale,
+    )
     started_at = time.monotonic()
     last_report_at = 0.0
     last_status: tuple[str, str, str] | None = None
@@ -175,10 +211,11 @@ def main() -> int:
         stop_confirm_frames=args.person_area_stop_confirm_frames,
         resume_confirm_frames=args.person_area_resume_confirm_frames,
     )
+    last_motor_action = ""
     frame_interval = 1.0 / max(0.1, args.fps)
 
     print(
-        f"motor=off person-backend={args.person_backend} "
+        f"backend={args.backend} person-backend={args.person_backend} "
         f"distance-backend={args.distance_backend} Ctrl+C: stop"
     )
     try:
@@ -218,6 +255,14 @@ def main() -> int:
                 person_confirming=person_confirming,
                 person_too_close=person_too_close,
             )
+            if action in ("left", "right") and args.turn_pulse > 0:
+                apply_person_action(drive, action, args.speed, args.turn_speed)
+                time.sleep(max(0.0, args.turn_pulse))
+                drive.stop()
+                last_motor_action = ""
+            elif action != last_motor_action:
+                apply_person_action(drive, action, args.speed, args.turn_speed)
+                last_motor_action = action
             if person_confirming:
                 position = "confirming"
                 reported_detection = measured_detection
@@ -268,8 +313,10 @@ def main() -> int:
     except KeyboardInterrupt:
         print("Stopping person follow decision.")
     finally:
+        drive.stop()
         distance_sensor.close()
         source.close()
+        drive.close()
 
     if last_annotated is not None:
         save_annotated_image(args.output, last_annotated)

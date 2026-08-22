@@ -181,6 +181,30 @@ OFFのままにする。
 停止を解除しない。人物枠の面積は姿勢による変動が大きいためログ記録だけに使い、
 既定では停止判定に使用しない。
 
+## Step 10: 人物追跡をモーターへ接続
+
+最初に既定のモーターモックで判断を確認する。`--backend gpiozero`を指定しない限り、
+実機モーターは動かない。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --backend mock \
+  --distance-backend vl53l1x \
+  --duration 15
+```
+
+次に車輪を床から浮かせ、モーター用電池をONにして実機確認する。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --backend gpiozero \
+  --distance-backend vl53l1x \
+  --duration 15
+```
+
+人物が中央なら前進、左右ならパルス旋回する。人物の確認中・消失、距離未取得、
+障害物検出では停止する。すべて確認するまで車輪を床へ下ろさない。
+
 ## Phase2 Checklist
 
 - [ ] Camera Module 3 WideとPi 5用ケーブルを用意
@@ -196,3 +220,4 @@ OFFのままにする。
 - [ ] 対象へ近づいたときの自動停止確認
 - [ ] モーターなしで人物検出
 - [ ] モーターなしで人物検出と距離センサーを統合
+- [ ] 車輪を浮かせて人物追跡モーターを確認

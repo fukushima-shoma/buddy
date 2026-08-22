@@ -356,15 +356,16 @@ python3 -m robot.person_cli \
   --duration 30
 ```
 
-## 人物検出と距離センサーの統合（モーターなし）
+## 人物検出・距離センサー・モーターの統合
 
-人物の位置と距離から走行判断だけを表示する。このCLIにはモーターバックエンドが
-なく、モーター用電池をOFFのまま確認できる。
+人物の位置と距離から走行判断を行う。モーターバックエンドの既定は`mock`なので、
+`--backend gpiozero`を明示しない限り実機モーターは動かない。
 
 最初に100cm固定のモック距離で確認する。
 
 ```sh
 python3 -m robot.person_follow_cli \
+  --backend mock \
   --distance-backend mock \
   --mock-distance 100 \
   --duration 30
@@ -377,6 +378,7 @@ python3 -m robot.person_follow_cli \
 
 ```sh
 python3 -m robot.person_follow_cli \
+  --backend mock \
   --distance-backend vl53l1x \
   --duration 30
 ```
@@ -426,6 +428,20 @@ python3 -m robot.person_follow_cli \
 人物取得は連続検出ではなく、直近3フレーム中2回の多数決を使う。1フレームの姿勢
 変化を許容しつつ、2回の水平中心が160pxより離れている場合は別候補として追跡を
 開始しない。
+
+判断ログが安定したら、車輪を床から浮かせ、モーター用電池をONにして15秒だけ
+実機モーターを確認する。
+
+```sh
+python3 -m robot.person_follow_cli \
+  --backend gpiozero \
+  --distance-backend vl53l1x \
+  --duration 15
+```
+
+人物が中央なら前進、左右なら80ミリ秒だけパルス旋回し、次の画像で方向を判断し直す。
+人物の確認中・消失、距離未取得、60cm以下の障害物では即座に停止する。車輪を床へ
+下ろす前に、前進・左右旋回・すべての停止理由を確認する。
 
 ## GPIOが使用中と表示された場合
 

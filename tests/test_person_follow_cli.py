@@ -2,10 +2,12 @@ import unittest
 
 from robot.person_detection import PersonDetection
 from robot.person_follow_cli import (
+    apply_person_action,
     build_parser,
     create_distance_sensor,
     person_tracking_decision,
 )
+from robot.motor import BuddyDrive, MockMotorDriver
 
 
 def detection(position: str) -> PersonDetection:
@@ -77,6 +79,7 @@ class PersonFollowCliTest(unittest.TestCase):
     def test_defaults_keep_motors_off_and_use_mock_distance(self) -> None:
         args = build_parser().parse_args([])
 
+        self.assertEqual(args.backend, "mock")
         self.assertEqual(args.person_backend, "mediapipe")
         self.assertEqual(args.distance_backend, "mock")
         self.assertEqual(args.stop_distance, 60.0)
@@ -94,6 +97,19 @@ class PersonFollowCliTest(unittest.TestCase):
         self.assertEqual(args.lost_frame_tolerance, 1)
         self.assertEqual(args.position_window, 3)
         self.assertEqual(create_distance_sensor(args).read_distance_cm(), 100.0)
+
+    def test_person_actions_control_mock_drive(self) -> None:
+        driver = MockMotorDriver()
+        drive = BuddyDrive(driver, max_speed=1.0)
+
+        apply_person_action(drive, "forward", 1.0, 1.0)
+        self.assertEqual((driver.left_speed, driver.right_speed), (1.0, 1.0))
+
+        apply_person_action(drive, "left", 1.0, 1.0)
+        self.assertEqual((driver.left_speed, driver.right_speed), (1.0, -1.0))
+
+        apply_person_action(drive, "stop", 1.0, 1.0)
+        self.assertEqual((driver.left_speed, driver.right_speed), (0.0, 0.0))
 
     def test_unconfirmed_person_stops_safely(self) -> None:
         self.assertEqual(
