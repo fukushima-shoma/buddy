@@ -21,7 +21,7 @@
 
 ## Current Phase
 
-Phase2: カメラ搭載
+Phase3準備: 音声で会話する
 
 詳細手順:
 
@@ -29,6 +29,7 @@ Phase2: カメラ搭載
 - [docs/phase0.md](docs/phase0.md)
 - [docs/phase1.md](docs/phase1.md)
 - [docs/phase2.md](docs/phase2.md)
+- [docs/phase3.md](docs/phase3.md)
 
 ## Phase0 Checklist
 

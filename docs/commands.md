@@ -28,6 +28,18 @@ python3 -m unittest discover -s tests -v
 
 すべての項目が`ok`になり、最後に`OK`と表示されれば成功。
 
+## 音声入出力（Phase3）
+
+マイク・スピーカー到着前はモックでWAV処理を確認できる。詳細は
+[`docs/phase3.md`](phase3.md)を参照する。
+
+```sh
+python3 -m robot.audio_cli tone --output captures/audio/tone.wav
+python3 -m robot.audio_cli inspect captures/audio/tone.wav
+python3 -m robot.audio_cli record --backend mock --duration 3
+python3 -m robot.audio_cli play captures/audio/recording.wav --backend mock
+```
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。
