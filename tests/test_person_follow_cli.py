@@ -138,6 +138,8 @@ class PersonFollowCliTest(unittest.TestCase):
         self.assertEqual(args.person_confirm_max_shift, 160)
         self.assertEqual(args.lost_frame_tolerance, 1)
         self.assertEqual(args.position_window, 3)
+        self.assertEqual(args.left_scale, 1.0)
+        self.assertEqual(args.right_scale, 1.0)
         self.assertEqual(create_distance_sensor(args).read_distance_cm(), 100.0)
 
     def test_person_actions_control_mock_drive(self) -> None:

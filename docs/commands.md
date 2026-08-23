@@ -63,7 +63,8 @@ python3 -m robot.motor_cli stop --backend gpiozero
 | `--left-scale` | 左モーターの補正値 |
 | `--right-scale` | 右モーターの補正値 |
 
-Buddyの実機では左`0.95`、右`1.0`を基本の補正値として使用する。
+既定値は左`1.0`、右`1.0`で、左右へ同じ出力を与える。車体が曲がる場合だけ、
+`--left-scale`または`--right-scale`を指定して補正する。
 
 ## キーボードによる手動運転
 

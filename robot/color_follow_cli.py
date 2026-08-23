@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds to turn before stopping and checking the next frame.",
     )
     parser.add_argument("--max-speed", type=float, default=1.0)
-    parser.add_argument("--left-scale", type=float, default=0.95)
+    parser.add_argument("--left-scale", type=float, default=1.0)
     parser.add_argument("--right-scale", type=float, default=1.0)
     parser.add_argument(
         "--distance-backend",

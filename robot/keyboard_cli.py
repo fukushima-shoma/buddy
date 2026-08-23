@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Drive Buddy with W/A/S/D keys.")
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--max-speed", type=float, default=1.0)
-    parser.add_argument("--left-scale", type=float, default=0.95)
+    parser.add_argument("--left-scale", type=float, default=1.0)
     parser.add_argument("--right-scale", type=float, default=1.0)
     parser.add_argument(
         "--deadman-timeout",
