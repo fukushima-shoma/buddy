@@ -76,6 +76,48 @@ class PersonFollowCliTest(unittest.TestCase):
             ("stop", "distance-not-ready"),
         )
 
+    def test_missing_distance_only_allows_turning_toward_person(self) -> None:
+        self.assertEqual(
+            person_tracking_decision(
+                detection("left"),
+                None,
+                distance_required=True,
+                obstacle_latched=False,
+            ),
+            ("left", "distance-not-ready-turning"),
+        )
+        self.assertEqual(
+            person_tracking_decision(
+                detection("right"),
+                None,
+                distance_required=True,
+                obstacle_latched=False,
+            ),
+            ("right", "distance-not-ready-turning"),
+        )
+
+    def test_missing_distance_never_overrides_safety_stops(self) -> None:
+        person = detection("left")
+        self.assertEqual(
+            person_tracking_decision(
+                person,
+                None,
+                distance_required=True,
+                obstacle_latched=True,
+            ),
+            ("stop", "obstacle"),
+        )
+        self.assertEqual(
+            person_tracking_decision(
+                person,
+                None,
+                distance_required=True,
+                obstacle_latched=False,
+                person_too_close=True,
+            ),
+            ("stop", "distance-not-ready"),
+        )
+
     def test_defaults_keep_motors_off_and_use_mock_distance(self) -> None:
         args = build_parser().parse_args([])
 

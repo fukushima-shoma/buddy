@@ -384,7 +384,10 @@ python3 -m robot.person_follow_cli \
 ```
 
 60cm以下では人物の位置に関係なく`reason=obstacle`で停止し、70cm以上へ離れるまで
-停止を保持する。距離がまだ取得できない場合も`reason=distance-not-ready`で停止する。
+停止を保持する。距離がまだ取得できず人物が中央または未検出なら
+`reason=distance-not-ready`で停止する。距離が未取得でも人物が左右にいる場合は、
+前進せず短い旋回だけ行い、距離センサーを人物へ向け直す。このときは
+`reason=distance-not-ready-turning`を出力する。
 最後の枠付き画像は`captures/person-follow.jpg`へ保存される。
 
 誤検出や一時的な値の揺れを抑える既定の安定化:

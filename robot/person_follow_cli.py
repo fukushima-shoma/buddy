@@ -110,6 +110,14 @@ def person_tracking_decision(
     person_too_close: bool = False,
 ) -> tuple[str, str]:
     if distance_required and distance_cm is None:
+        if obstacle_latched:
+            return "stop", "obstacle"
+        if (
+            detection is not None
+            and not person_too_close
+            and detection.position in ("left", "right")
+        ):
+            return detection.position, "distance-not-ready-turning"
         return "stop", "distance-not-ready"
     if distance_required and obstacle_latched:
         return "stop", "obstacle"
