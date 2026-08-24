@@ -46,6 +46,11 @@ class FakeButton:
 class FakeWakeWordRecognizer:
     def __init__(self) -> None:
         self.calls = 0
+        self.reset_calls = 0
+
+    def Reset(self) -> None:
+        self.calls = 0
+        self.reset_calls += 1
 
     def AcceptWaveform(self, chunk: bytes) -> bool:
         if len(chunk) != 3200:
@@ -132,12 +137,35 @@ class InteractionTest(unittest.TestCase):
         trigger.close()
 
         self.assertEqual(recognizer.calls, 2)
+        self.assertEqual(recognizer.reset_calls, 1)
         self.assertTrue(process.terminated)
         self.assertEqual(
             commands[0][0:4],
             ["arecord", "--quiet", "-D", "plughw:2,0"],
         )
         self.assertIn("16000", commands[0])
+
+    def test_wake_word_resets_recognizer_before_every_wait(self) -> None:
+        recognizer = FakeWakeWordRecognizer()
+        frame = bytes(3200)
+        processes = [
+            FakeAudioProcess([frame, frame]),
+            FakeAudioProcess([frame, frame]),
+        ]
+
+        def factory(command: list[str], **kwargs: object) -> FakeAudioProcess:
+            return processes.pop(0)
+
+        trigger = VoskWakeWordTrigger(
+            recognizer=recognizer,
+            process_factory=factory,
+        )
+
+        self.assertTrue(trigger.wait())
+        self.assertTrue(trigger.wait())
+
+        self.assertEqual(recognizer.reset_calls, 2)
+        self.assertEqual(processes, [])
 
     def test_wake_word_phrase_must_not_be_empty(self) -> None:
         with self.assertRaisesRegex(ValueError, "phrase"):

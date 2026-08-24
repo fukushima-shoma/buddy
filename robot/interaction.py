@@ -152,6 +152,7 @@ class VoskWakeWordTrigger:
     def wait(self) -> bool:
         if self._recognizer is None:
             raise RuntimeError("Wake word trigger is already closed.")
+        self._recognizer.Reset()
         command = [
             "arecord",
             "--quiet",
