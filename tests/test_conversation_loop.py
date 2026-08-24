@@ -49,6 +49,8 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.audio_backend, "mock")
         self.assertEqual(args.transcription_backend, "mock")
         self.assertEqual(args.reply_backend, "mock")
+        self.assertEqual(args.memory, "none")
+        self.assertEqual(args.memory_turns, 6)
         self.assertEqual(args.speech_backend, "mock")
         self.assertEqual(args.playback_backend, "mock")
 

@@ -16,7 +16,10 @@ class FakeResponses:
 
     def create(self, **kwargs: object) -> SimpleNamespace:
         self.calls.append(kwargs)
-        return SimpleNamespace(output_text="  こんにちは！  ")
+        return SimpleNamespace(
+            id=f"resp_{len(self.calls)}",
+            output_text="  こんにちは！  ",
+        )
 
 
 class ConversationTest(unittest.TestCase):
@@ -55,6 +58,37 @@ class ConversationTest(unittest.TestCase):
         self.assertIn("AI", BUDDY_INSTRUCTIONS)
         self.assertIn("個人情報", BUDDY_INSTRUCTIONS)
         self.assertIn("信頼できる大人", BUDDY_INSTRUCTIONS)
+
+    def test_session_context_passes_previous_response_id(self) -> None:
+        responses = FakeResponses()
+        client = SimpleNamespace(responses=responses)
+        generator = OpenAIReplyGenerator(
+            client=client,
+            remember_context=True,
+        )
+
+        generator.reply("ぼくの好きな色は青だよ")
+        generator.reply("何色が好きだと言った？")
+
+        self.assertNotIn("previous_response_id", responses.calls[0])
+        self.assertEqual(responses.calls[1]["previous_response_id"], "resp_1")
+        self.assertEqual(responses.calls[1]["instructions"], BUDDY_INSTRUCTIONS)
+
+    def test_session_context_resets_after_configured_turns(self) -> None:
+        responses = FakeResponses()
+        client = SimpleNamespace(responses=responses)
+        generator = OpenAIReplyGenerator(
+            client=client,
+            remember_context=True,
+            max_context_turns=2,
+        )
+
+        generator.reply("1")
+        generator.reply("2")
+        generator.reply("3")
+
+        self.assertEqual(responses.calls[1]["previous_response_id"], "resp_1")
+        self.assertNotIn("previous_response_id", responses.calls[2])
 
     def test_cli_defaults_do_not_call_openai(self) -> None:
         args = build_parser().parse_args(["こんにちは"])

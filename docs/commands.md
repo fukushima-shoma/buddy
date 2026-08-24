@@ -120,6 +120,7 @@ python -m robot.conversation_loop_cli \
   --audio-device plughw:2,0 \
   --transcription-backend openai \
   --reply-backend openai \
+  --memory session \
   --speech-backend openai \
   --playback-backend alsa \
   --playback-device plughw:2,0 \
@@ -128,8 +129,9 @@ python -m robot.conversation_loop_cli \
 
 `turn=N listening=true`の後に話すと、発話後0.8秒の無音で応答へ進む。10秒間発話が
 なければAPIを呼ばず次へ進む。`--turns 2`なら2回で終了する。声を拾わない場合は
-`--speech-threshold 300`、雑音を拾う場合は`--speech-threshold 800`を試す。各ターンは
-独立しており、会話履歴は保持しない。
+`--speech-threshold 300`、雑音を拾う場合は`--speech-threshold 800`を試す。
+`--memory session`は会話の文脈を引き継ぎ、既定では6返答ごとにリセットする。
+文字の履歴ファイルは作らないが、最新ターンの入出力WAVは保存される。
 
 ## モーター単体テスト
 

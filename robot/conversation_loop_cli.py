@@ -55,6 +55,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reply-model", default=DEFAULT_REPLY_MODEL)
     parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
     parser.add_argument(
+        "--memory",
+        choices=("none", "session"),
+        default="none",
+        help="Use session memory backed by previous_response_id.",
+    )
+    parser.add_argument(
+        "--memory-turns",
+        type=int,
+        default=6,
+        help="Reset session context after this many replies.",
+    )
+    parser.add_argument(
         "--speech-backend", choices=("mock", "openai"), default="mock"
     )
     parser.add_argument("--speech-model", default=DEFAULT_SPEECH_MODEL)
@@ -162,6 +174,8 @@ def main() -> int:
         args.reply_backend,
         model=args.reply_model,
         mock_reply=args.mock_reply,
+        remember_context=args.memory == "session",
+        max_context_turns=args.memory_turns,
     )
     synthesizer = create_synthesizer(
         args.speech_backend,
@@ -173,7 +187,8 @@ def main() -> int:
     print(
         f"conversation-loop turns={turns} audio={args.audio_backend} "
         f"transcription={args.transcription_backend} reply={args.reply_backend} "
-        f"speech={args.speech_backend} playback={args.playback_backend}"
+        f"memory={args.memory} speech={args.speech_backend} "
+        f"playback={args.playback_backend}"
     )
     run_conversation_loop(
         recorder=recorder,

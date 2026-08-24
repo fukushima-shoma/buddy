@@ -24,10 +24,16 @@ def create_reply_generator(
     *,
     model: str,
     mock_reply: str,
+    remember_context: bool = False,
+    max_context_turns: int = 6,
 ) -> ReplyGenerator:
     if backend == "mock":
         return MockReplyGenerator(mock_reply)
-    return OpenAIReplyGenerator(model=model)
+    return OpenAIReplyGenerator(
+        model=model,
+        remember_context=remember_context,
+        max_context_turns=max_context_turns,
+    )
 
 
 def main() -> int:

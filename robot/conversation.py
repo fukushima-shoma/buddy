@@ -35,6 +35,8 @@ class OpenAIReplyGenerator:
         self,
         model: str = DEFAULT_REPLY_MODEL,
         instructions: str = BUDDY_INSTRUCTIONS,
+        remember_context: bool = False,
+        max_context_turns: int = 6,
         client: Any | None = None,
     ) -> None:
         if client is None:
@@ -53,18 +55,37 @@ class OpenAIReplyGenerator:
             client = OpenAI()
         self.model = model
         self.instructions = instructions
+        self.remember_context = remember_context
+        self.max_context_turns = max(1, max_context_turns)
+        self._previous_response_id: str | None = None
+        self._context_turns = 0
         self._client = client
 
     def reply(self, user_text: str) -> str:
         if not user_text.strip():
             raise ValueError("Cannot generate a reply from empty text.")
-        response = self._client.responses.create(
+        if self.remember_context and self._context_turns >= self.max_context_turns:
+            self.reset_context()
+        request = dict(
             model=self.model,
             reasoning={"effort": "low"},
             instructions=self.instructions,
             input=user_text,
         )
+        if self.remember_context and self._previous_response_id is not None:
+            request["previous_response_id"] = self._previous_response_id
+        response = self._client.responses.create(**request)
         text = getattr(response, "output_text", None)
         if not isinstance(text, str):
             raise RuntimeError("The response did not contain output text.")
+        if self.remember_context:
+            response_id = getattr(response, "id", None)
+            if not isinstance(response_id, str) or not response_id:
+                raise RuntimeError("The response did not contain an ID for context.")
+            self._previous_response_id = response_id
+            self._context_turns += 1
         return text.strip()
+
+    def reset_context(self) -> None:
+        self._previous_response_id = None
+        self._context_turns = 0
