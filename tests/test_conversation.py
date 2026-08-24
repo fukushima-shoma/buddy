@@ -72,6 +72,12 @@ class ConversationTest(unittest.TestCase):
         self.assertIn("秘密", instructions)
         self.assertIn("信頼できる大人", instructions)
 
+    def test_parent_managed_profile_is_added_to_instructions(self) -> None:
+        instructions = get_reply_instructions(True, {"好きな色": "青"})
+
+        self.assertIn("好きな色: 青", instructions)
+        self.assertIn("保護者", instructions)
+
     def test_session_context_passes_previous_response_id(self) -> None:
         responses = FakeResponses()
         client = SimpleNamespace(responses=responses)

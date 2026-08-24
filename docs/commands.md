@@ -143,6 +143,25 @@ python -m robot.conversation_loop_cli \
 会話中に「バイバイ」「またね」「さようなら」「おしまい」のいずれかを単独で話すと、
 Buddyがお別れを返して、その会話セッションを指定ターン数より前に終了する。
 
+保護者が確認した情報だけを次回以降も覚えさせる場合は、ローカル記憶を管理する。
+子どもの会話から情報を自動保存することはない。
+
+```sh
+python -m robot.memory_cli set 好きな色 青
+python -m robot.memory_cli set 好きな動物 ぞう
+python -m robot.memory_cli list
+python -m robot.memory_cli delete 好きな色
+```
+
+全削除は確認用の`--yes`が必要になる。
+
+```sh
+python -m robot.memory_cli clear --yes
+```
+
+記憶は`data/buddy-memory.json`だけに保存され、Gitの対象外になる。会話コマンドは
+このファイルが存在すると保護者登録情報を読み込む。
+
 3歳半向けの短い返答、1つの質問、二択、聞き取り失敗時の音声再質問を有効にする。
 保護者同席で、最初は有限ターンかつ履歴なしで試す。
 子どもの短い日常会話を文字起こしの文脈ヒントとして自動送信し、典型的な誤認識文は

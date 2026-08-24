@@ -66,6 +66,7 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertFalse(args.child_mode)
         self.assertEqual(args.memory, "none")
         self.assertEqual(args.memory_turns, 30)
+        self.assertEqual(args.profile_memory, Path("data/buddy-memory.json"))
         self.assertEqual(args.speech_backend, "mock")
         self.assertEqual(args.speech_style, "calm")
         self.assertEqual(args.playback_backend, "mock")

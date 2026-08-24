@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Protocol
+from typing import Any, Mapping, Protocol
+
+from robot.profile_memory import format_profile_memory
 
 
 DEFAULT_REPLY_MODEL = "gpt-5.6"
@@ -36,8 +38,13 @@ CHILD_REPLY_INSTRUCTIONS = """\
 """
 
 
-def get_reply_instructions(child_mode: bool) -> str:
-    return CHILD_REPLY_INSTRUCTIONS if child_mode else BUDDY_INSTRUCTIONS
+def get_reply_instructions(
+    child_mode: bool,
+    profile_facts: Mapping[str, str] | None = None,
+) -> str:
+    instructions = CHILD_REPLY_INSTRUCTIONS if child_mode else BUDDY_INSTRUCTIONS
+    profile = format_profile_memory(profile_facts or {})
+    return f"{instructions}\n\n{profile}" if profile else instructions
 
 
 class ReplyGenerator(Protocol):

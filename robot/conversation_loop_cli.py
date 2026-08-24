@@ -25,6 +25,7 @@ from robot.interaction import (
     create_start_trigger,
     run_interaction_station,
 )
+from robot.profile_memory import DEFAULT_PROFILE_MEMORY_PATH, ParentManagedMemory
 from robot.reply_cli import create_reply_generator
 from robot.speech import (
     DEFAULT_SPEECH_MODEL,
@@ -124,6 +125,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_MEMORY_TURNS,
         help="Reset session context after this many replies.",
+    )
+    parser.add_argument(
+        "--profile-memory",
+        type=Path,
+        default=DEFAULT_PROFILE_MEMORY_PATH,
+        help="Parent-managed local profile memory JSON file.",
     )
     parser.add_argument(
         "--speech-backend", choices=("mock", "openai"), default="mock"
@@ -351,6 +358,7 @@ def main() -> int:
         remember_context=args.memory == "session",
         max_context_turns=args.memory_turns,
         child_mode=args.child_mode,
+        profile_facts=ParentManagedMemory(args.profile_memory).load(),
     )
     synthesizer = create_synthesizer(
         args.speech_backend,

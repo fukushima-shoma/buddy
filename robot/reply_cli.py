@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from typing import Mapping
 
 from robot.conversation import (
     DEFAULT_MEMORY_TURNS,
@@ -34,12 +35,13 @@ def create_reply_generator(
     remember_context: bool = False,
     max_context_turns: int = DEFAULT_MEMORY_TURNS,
     child_mode: bool = False,
+    profile_facts: Mapping[str, str] | None = None,
 ) -> ReplyGenerator:
     if backend == "mock":
         return MockReplyGenerator(mock_reply)
     return OpenAIReplyGenerator(
         model=model,
-        instructions=get_reply_instructions(child_mode),
+        instructions=get_reply_instructions(child_mode, profile_facts),
         remember_context=remember_context,
         max_context_turns=max_context_turns,
     )

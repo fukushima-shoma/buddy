@@ -1,6 +1,7 @@
 captures/
 models/person_detection/
 models/wakeword/
+data/buddy-memory.json
 .env
 .env.*
 !.env.example

@@ -259,6 +259,10 @@ python -m robot.conversation_loop_cli \
 このプログラムは文字起こしや返答の履歴ファイルを作らないが、入力音声と返答音声の
 WAVには各ターンの最新内容が残る。
 
+セッションをまたいで残す情報は`robot.memory_cli`で保護者が明示的に登録する。
+保存先はGit対象外の`data/buddy-memory.json`で、一覧表示・個別削除・全削除が可能。
+子どもの発話から氏名や好みを自動抽出して保存することはしない。
+
 ### 待機・会話状態を切り替える
 
 `--start-trigger keyboard`を付けると、起動直後は`state=waiting`で待機し、Enterを
