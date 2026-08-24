@@ -130,7 +130,7 @@ python -m robot.conversation_loop_cli \
   --memory-turns 30 \
   --speech-backend openai \
   --speech-style calm \
-  --playback-backend alsa \
+  --playback-backend alsa-interruptible \
   --playback-device plughw:2,0 \
   --turns 0
 ```
@@ -267,7 +267,7 @@ python -m robot.conversation_loop_cli \
   --memory-turns 30 \
   --speech-backend openai \
   --speech-style calm \
-  --playback-backend alsa \
+  --playback-backend alsa-interruptible \
   --playback-device plughw:2,0 \
   --turns 0 \
   --max-silence-turns 2 \
@@ -280,8 +280,34 @@ python -m robot.conversation_loop_cli \
 会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
 10秒間の無音が2回続いた場合も、「お話はおしまいかな。またお話ししようね。」と
 話して待機へ戻る。無効化する場合は`--max-silence-turns 0`を指定する。
+Buddyの返答中に大きめの声が2回連続で検出されると再生を止め、次の録音へ進む。
+スピーカー自身の音で止まる場合は`--barge-in-threshold 3500`のように上げる。
+割り込みを使わない場合は`--playback-backend alsa`へ戻す。
 標準の呼びかけは`ねえ バディ`。別の言い方を試す場合は、例えば
 `--wake-phrase バディ`を追加する。`models/wakeword/`は`.gitignore`で除外している。
+
+会話開始前に人物の方向へ短く旋回する機能は、まずモーターを動かさないモックで
+カメラ判定だけを確認する。
+
+```sh
+# 上の会話コマンドへ追加
+--orientation-backend mock
+```
+
+`orientation=left/right reason=aligning`または`person-centered`が確認できたら、周囲を
+片付け、最初は車輪を床から浮かせて次を試す。
+
+```sh
+# 上の会話コマンドへ追加
+--orientation-backend gpiozero \
+--orientation-speed 1 \
+--orientation-pulse 0.12 \
+--orientation-attempts 4
+```
+
+人物を検出できない場合は旋回しない。1回0.12秒、最大4回だけ旋回し、各動作後に
+必ず停止する。キャスターの向きや周囲の障害物は画像だけでは保証できないため、
+保護者の監視下で調整する。通常は`--orientation-backend off`で無効になる。
 
 ## モーター単体テスト
 

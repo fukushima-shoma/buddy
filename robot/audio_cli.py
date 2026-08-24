@@ -8,6 +8,7 @@ from robot.audio import (
     AlsaAudioRecorder,
     AudioPlayer,
     AudioRecorder,
+    InterruptibleAlsaAudioPlayer,
     MockAudioPlayer,
     MockAudioRecorder,
     generate_tone,
@@ -40,7 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     play = subparsers.add_parser("play", help="Play a WAV file.")
     play.add_argument("source", type=Path)
-    play.add_argument("--backend", choices=("mock", "alsa"), default="mock")
+    play.add_argument(
+        "--backend", choices=("mock", "alsa", "alsa-interruptible"), default="mock"
+    )
     play.add_argument("--device", default="default")
     return parser
 
@@ -51,9 +54,21 @@ def create_recorder(backend: str, device: str) -> AudioRecorder:
     return AlsaAudioRecorder(device=device)
 
 
-def create_player(backend: str, device: str) -> AudioPlayer:
+def create_player(
+    backend: str,
+    device: str,
+    *,
+    capture_device: str | None = None,
+    interruption_threshold: float = 2500.0,
+) -> AudioPlayer:
     if backend == "mock":
         return MockAudioPlayer()
+    if backend == "alsa-interruptible":
+        return InterruptibleAlsaAudioPlayer(
+            device=device,
+            capture_device=capture_device,
+            threshold=interruption_threshold,
+        )
     return AlsaAudioPlayer(device=device)
 
 

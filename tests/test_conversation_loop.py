@@ -76,6 +76,7 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertIsNone(args.wake_word_model)
         self.assertEqual(args.wake_phrase, "ねえ バディ")
         self.assertIsNone(args.wake_word_device)
+        self.assertEqual(args.orientation_backend, "off")
 
     def test_two_turns_run_complete_pipeline_and_pause_once(self) -> None:
         with TemporaryDirectory() as directory:

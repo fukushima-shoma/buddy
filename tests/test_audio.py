@@ -10,6 +10,7 @@ from robot.audio import (
     AlsaAudioPlayer,
     AlsaAudioRecorder,
     AlsaVoiceActivatedRecorder,
+    InterruptibleAlsaAudioPlayer,
     MockAudioPlayer,
     MockAudioRecorder,
     NoSpeechDetectedError,
@@ -104,6 +105,36 @@ class AudioTest(unittest.TestCase):
         self.assertEqual(commands[0][0:3], ["arecord", "-D", "hw:2,0"])
         self.assertIn("3", commands[0])
         self.assertEqual(commands[1], ["aplay", "-D", "hw:2,0", "output.wav"])
+
+    def test_interruptible_player_stops_after_sustained_voice(self) -> None:
+        playback = self.FakeProcess([])
+        capture = self.FakeProcess(
+            [self.pcm_chunk(3000), self.pcm_chunk(3200)]
+        )
+        processes = iter([playback, capture])
+        commands: list[list[str]] = []
+
+        def factory(command: list[str], **kwargs: object) -> AudioTest.FakeProcess:
+            commands.append(command)
+            return next(processes)
+
+        player = InterruptibleAlsaAudioPlayer(
+            device="plughw:2,0",
+            capture_device="plughw:2,0",
+            sample_rate=1000,
+            chunk_duration=0.1,
+            ignore_duration=0,
+            confirm_chunks=2,
+            process_factory=factory,
+        )
+
+        player.play(Path("reply.wav"))
+
+        self.assertTrue(player.last_interrupted)
+        self.assertTrue(playback.terminated)
+        self.assertTrue(capture.terminated)
+        self.assertEqual(commands[0][0], "aplay")
+        self.assertEqual(commands[1][0], "arecord")
 
     def test_cli_defaults_are_hardware_safe(self) -> None:
         record = build_parser().parse_args(["record"])

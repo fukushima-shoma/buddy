@@ -285,3 +285,74 @@ class AlsaAudioPlayer:
             ["aplay", "-D", self.device, str(source.expanduser())],
             check=True,
         )
+
+
+class InterruptibleAlsaAudioPlayer:
+    """Stop playback after sustained microphone activity; opt-in due to echo."""
+
+    def __init__(
+        self,
+        device: str = "default",
+        *,
+        capture_device: str | None = None,
+        threshold: float = 2500.0,
+        sample_rate: int = 16000,
+        chunk_duration: float = 0.1,
+        ignore_duration: float = 0.6,
+        confirm_chunks: int = 2,
+        process_factory: Callable[..., Any] = subprocess.Popen,
+    ) -> None:
+        self.device = device
+        self.capture_device = capture_device or device
+        self.threshold = max(0.0, threshold)
+        self.sample_rate = max(1, sample_rate)
+        self.chunk_duration = max(0.02, chunk_duration)
+        self.ignore_chunks = max(0, math.ceil(ignore_duration / self.chunk_duration))
+        self.confirm_chunks = max(1, confirm_chunks)
+        self._process_factory = process_factory
+        self.last_interrupted = False
+
+    def play(self, source: Path) -> None:
+        playback = self._process_factory(
+            ["aplay", "-D", self.device, str(source.expanduser())],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        capture = self._process_factory(
+            [
+                "arecord", "--quiet", "-D", self.capture_device, "-c", "1",
+                "-f", "S16_LE", "-r", str(self.sample_rate), "-t", "raw",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        chunk_bytes = max(1, round(self.sample_rate * self.chunk_duration)) * 2
+        active_chunks = 0
+        observed_chunks = 0
+        self.last_interrupted = False
+        try:
+            if capture.stdout is None:
+                raise RuntimeError("arecord did not provide an audio stream")
+            while playback.poll() is None:
+                chunk = capture.stdout.read(chunk_bytes)
+                if len(chunk) != chunk_bytes:
+                    break
+                observed_chunks += 1
+                if observed_chunks <= self.ignore_chunks:
+                    continue
+                active_chunks = active_chunks + 1 if pcm16_rms(chunk) >= self.threshold else 0
+                if active_chunks >= self.confirm_chunks:
+                    playback.terminate()
+                    playback.wait(timeout=1)
+                    self.last_interrupted = True
+                    break
+            if playback.poll() is None:
+                playback.wait()
+        finally:
+            if capture.poll() is None:
+                capture.terminate()
+                try:
+                    capture.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    capture.kill()
+                    capture.wait()

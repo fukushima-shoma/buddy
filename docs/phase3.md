@@ -253,6 +253,14 @@ python -m robot.conversation_loop_cli \
 また、発話待ちの10秒間に声が入らない状態が2回続くと、会話が終わったと判断して
 お別れを言い、同じ待機状態へ戻る。回数は`--max-silence-turns`で変更できる。
 
+`--playback-backend alsa-interruptible`では返答再生と同時にマイク音量を監視し、
+既定値2500以上が2回続くと再生を中断して次の録音へ進む。EMEETのエコーで誤作動
+する場合は`--barge-in-threshold`を上げて調整する。この機能は明示時だけ有効になる。
+
+`--orientation-backend gpiozero`を明示すると、会話の録音前に人物検出を行い、人物が
+左右にいる場合だけ0.12秒ずつ最大4回旋回する。人物未検出時は動かず、中央へ入るか
+上限へ達すると停止する。既定値は`off`で、実機前に`mock`で判定ログを確認する。
+
 `--memory session`を付けると、直前までの会話をOpenAI Responses APIの
 `previous_response_id`で次の返答へ引き継ぐ。Buddyの安全指示は毎ターン送信し、
 既定では30回返答すると文脈をリセットする。長さは`--memory-turns 20`のように変更できる。

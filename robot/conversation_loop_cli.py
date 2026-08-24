@@ -146,9 +146,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("captures/audio/conversation-reply.wav"),
     )
     parser.add_argument(
-        "--playback-backend", choices=("mock", "alsa"), default="mock"
+        "--playback-backend",
+        choices=("mock", "alsa", "alsa-interruptible"),
+        default="mock",
     )
     parser.add_argument("--playback-device", default="default")
+    parser.add_argument(
+        "--barge-in-threshold",
+        type=float,
+        default=2500.0,
+        help="Microphone RMS needed to interrupt alsa-interruptible playback.",
+    )
     parser.add_argument(
         "--turns",
         type=int,
@@ -198,6 +206,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--wake-word-device",
         help="ALSA capture device; defaults to --audio-device.",
+    )
+    parser.add_argument(
+        "--orientation-backend",
+        choices=("off", "mock", "gpiozero"),
+        default="off",
+        help="Optionally turn toward a detected person before recording.",
+    )
+    parser.add_argument("--orientation-speed", type=float, default=1.0)
+    parser.add_argument("--orientation-pulse", type=float, default=0.12)
+    parser.add_argument("--orientation-attempts", type=int, default=4)
+    parser.add_argument(
+        "--person-model",
+        type=Path,
+        default=Path("models/person_detection/person_detection_mediapipe_2023mar.onnx"),
+    )
+    parser.add_argument(
+        "--person-model-helper",
+        type=Path,
+        default=Path("models/person_detection/mp_persondet.py"),
     )
     return parser
 
@@ -366,7 +393,12 @@ def main() -> int:
         voice=args.speech_voice,
         style=args.speech_style,
     )
-    player = create_player(args.playback_backend, args.playback_device)
+    player = create_player(
+        args.playback_backend,
+        args.playback_device,
+        capture_device=args.audio_device,
+        interruption_threshold=args.barge_in_threshold,
+    )
     turns = "until-Ctrl+C" if args.turns == 0 else str(args.turns)
     print(
         f"conversation-loop turns={turns} audio={args.audio_backend} "
@@ -381,7 +413,37 @@ def main() -> int:
             "child-mode=supervised-test-only "
             "personal-data=do-not-share-without-required-data-controls"
         )
+    orient_session: Callable[[], str] | None = None
+    if args.orientation_backend != "off":
+        from robot.conversation_orientation import orient_to_person
+        from robot.motor import BuddyDrive, MockMotorDriver
+        from robot.person_detection import MediaPipePersonDetector
+        from robot.picamera2_driver import Picamera2FrameSource
+
+        detector = MediaPipePersonDetector(
+            model_path=args.person_model,
+            helper_path=args.person_model_helper,
+        )
+
+        def orient_session() -> str:
+            if args.orientation_backend == "gpiozero":
+                from robot.gpiozero_driver import Tb6612GpioDriver
+
+                driver = Tb6612GpioDriver()
+            else:
+                driver = MockMotorDriver()
+            return orient_to_person(
+                source=Picamera2FrameSource(width=640, height=480),
+                detector=detector,
+                drive=BuddyDrive(driver, max_speed=args.orientation_speed),
+                attempts=args.orientation_attempts,
+                speed=args.orientation_speed,
+                pulse=args.orientation_pulse,
+            )
+
     def run_session(*, catch_interrupt: bool = True) -> int:
+        if orient_session is not None:
+            orient_session()
         return run_conversation_loop(
             recorder=recorder,
             transcriber=transcriber,
