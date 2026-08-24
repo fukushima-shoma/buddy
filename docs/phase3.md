@@ -176,7 +176,7 @@ aplay -D plughw:2,0 captures/audio/transcription-input.wav
 python -m robot.speech_cli \
   "こんにちは。ぼくはAIロボットのBuddyだよ。" \
   --backend openai \
-  --style buddy \
+  --style calm \
   --playback-backend alsa \
   --device plughw:2,0
 ```
@@ -196,10 +196,11 @@ python -m robot.transcribe_cli record \
   --playback-device plughw:2,0
 ```
 
-既定の音声合成モデルは`gpt-4o-mini-tts`、声は`marin`、話し方は`buddy`、
-保存形式はWAV。`buddy`は、3歳くらいの子どもへ少しゆっくり話し、意味に沿って
-自然な抑揚と間を付ける設定。用途に応じて`--style cheerful`（明るい）または
-`--style calm`（落ち着いた）へ変更できる。
+既定の音声合成モデルは`gpt-4o-mini-tts`、声は`coral`、話し方は`calm`、
+保存形式はWAV。`calm`は、3歳くらいの子どもへ少しゆっくり話し、若々しく優しい
+声色と自然な抑揚・間を付ける設定。用途に応じて`--style buddy`（自然で温かい）
+または`--style cheerful`（明るい）へ変更できる。以前の声へ戻す場合は、単体音声で
+`--voice marin`、連続会話で`--speech-voice marin`を指定する。
 
 連続会話や文字起こし後の返答では`--speech-style`を使う。
 
@@ -210,7 +211,7 @@ python -m robot.conversation_loop_cli \
   --transcription-backend openai \
   --reply-backend openai \
   --speech-backend openai \
-  --speech-style buddy \
+  --speech-style calm \
   --playback-backend alsa \
   --playback-device plughw:2,0 \
   --turns 2

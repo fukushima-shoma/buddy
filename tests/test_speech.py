@@ -123,8 +123,15 @@ class SpeechTest(unittest.TestCase):
 
         self.assertEqual(args.backend, "mock")
         self.assertEqual(args.playback_backend, "none")
-        self.assertEqual(args.voice, DEFAULT_SPEECH_VOICE)
-        self.assertEqual(args.style, DEFAULT_SPEECH_STYLE)
+        self.assertEqual(args.voice, "coral")
+        self.assertEqual(args.style, "calm")
+
+    def test_default_calm_style_targets_a_gentle_youthful_voice(self) -> None:
+        instructions = get_speech_instructions(DEFAULT_SPEECH_STYLE)
+
+        self.assertIn("若々しく優しい", instructions)
+        self.assertIn("少しゆっくり", instructions)
+        self.assertIn("穏やかな抑揚", instructions)
 
     def test_speech_styles_have_distinct_instructions(self) -> None:
         self.assertEqual(

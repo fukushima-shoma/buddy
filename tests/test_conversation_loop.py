@@ -5,7 +5,7 @@ import unittest
 from robot.audio import MockAudioPlayer, MockAudioRecorder, NoSpeechDetectedError
 from robot.conversation import MockReplyGenerator
 from robot.conversation_loop_cli import build_parser, run_conversation_loop
-from robot.speech import DEFAULT_SPEECH_STYLE, MockSpeechSynthesizer
+from robot.speech import MockSpeechSynthesizer
 from robot.transcription import MockTranscriber
 
 
@@ -52,7 +52,7 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.memory, "none")
         self.assertEqual(args.memory_turns, 6)
         self.assertEqual(args.speech_backend, "mock")
-        self.assertEqual(args.speech_style, DEFAULT_SPEECH_STYLE)
+        self.assertEqual(args.speech_style, "calm")
         self.assertEqual(args.playback_backend, "mock")
 
     def test_two_turns_run_complete_pipeline_and_pause_once(self) -> None:

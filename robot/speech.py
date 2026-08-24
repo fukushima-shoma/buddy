@@ -8,8 +8,8 @@ from robot.audio import generate_tone
 
 
 DEFAULT_SPEECH_MODEL = "gpt-4o-mini-tts"
-DEFAULT_SPEECH_VOICE = "marin"
-DEFAULT_SPEECH_STYLE = "buddy"
+DEFAULT_SPEECH_VOICE = "coral"
+DEFAULT_SPEECH_STYLE = "calm"
 SPEECH_STYLE_INSTRUCTIONS = {
     "buddy": (
         "3歳くらいの子どもへ話すような、親しみのある自然な日本語で話してください。"
@@ -24,9 +24,11 @@ SPEECH_STYLE_INSTRUCTIONS = {
         "少しゆっくりに保ち、大げさに叫んだり、アニメ声にしたりしないでください。"
     ),
     "calm": (
-        "子どもを安心させる、落ち着いた温かい自然な日本語で話してください。"
-        "ゆっくりした速さと柔らかな声量で、文の意味に沿った穏やかな抑揚をつけ、"
-        "句読点では短く自然な間を置いてください。ささやき声にはしないでください。"
+        "3歳くらいの子どもを安心させる、若々しく優しい女性を思わせる声色で、"
+        "温かく自然な日本語を話してください。少しゆっくりした速さと柔らかな声量で、"
+        "文の意味に沿った穏やかな抑揚をつけてください。質問の語尾はわずかに上げ、"
+        "句読点では短く自然な間を置いてください。ささやき声、大げさなアニメ声、"
+        "幼児語を多用する話し方にはしないでください。"
     ),
 }
 SPEECH_STYLES = tuple(SPEECH_STYLE_INSTRUCTIONS)
