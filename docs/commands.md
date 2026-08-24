@@ -112,6 +112,22 @@ python -m robot.transcribe_cli record \
 生成音声は`captures/audio/reply.wav`へ保存される。利用時はAI生成音声であることを
 周囲の人へ伝える。
 
+録音と音声返答を`Ctrl+C`まで繰り返す。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --speech-backend openai \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 0
+```
+
+`--turns 2`なら2回で終了する。各ターンは独立しており、会話履歴は保持しない。
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。

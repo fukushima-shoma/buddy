@@ -199,6 +199,26 @@ python -m robot.transcribe_cli record \
 生成音声は`captures/audio/reply.wav`へ保存される。聞いている人には、この声が
 人間ではなくAIによる生成音声であることをあらかじめ伝える。
 
+## Step 9: 会話を繰り返す
+
+次のコマンドは、`Ctrl+C`を押すまで録音と返答を繰り返す。再生後は0.5秒待ってから
+次の録音を始めるため、Buddy自身の声がマイクへ戻りにくい。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --speech-backend openai \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 0
+```
+
+各ターンは5秒録音する。有限回だけ試す場合は`--turns 2`のように指定する。
+現在は各ターンが独立しており、以前の会話内容は次の返答へ渡さない。
+
 ## 安全上の注意
 
 - 最初は音量を小さくする。
@@ -217,4 +237,4 @@ python -m robot.transcribe_cli record \
 - [x] 音声認識
 - [x] 返答生成
 - [x] 音声合成
-- [ ] 会話ループ
+- [x] 会話ループ
