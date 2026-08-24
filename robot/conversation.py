@@ -56,6 +56,8 @@ class OpenAIReplyGenerator:
         self._client = client
 
     def reply(self, user_text: str) -> str:
+        if not user_text.strip():
+            raise ValueError("Cannot generate a reply from empty text.")
         response = self._client.responses.create(
             model=self.model,
             reasoning={"effort": "low"},

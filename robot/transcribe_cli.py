@@ -96,8 +96,11 @@ def main() -> int:
         mock_text=args.mock_text,
     )
     transcript = transcriber.transcribe(source, language=args.language)
-    print(f"transcript={transcript}")
+    print(f"transcript={transcript or 'not-found'}")
     if args.reply_backend != "none":
+        if not transcript:
+            print("reply=skipped reason=empty-transcript")
+            return 0
         generator = create_reply_generator(
             args.reply_backend,
             model=args.reply_model,

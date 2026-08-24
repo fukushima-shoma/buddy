@@ -41,6 +41,16 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(responses.calls[0]["instructions"], BUDDY_INSTRUCTIONS)
         self.assertEqual(responses.calls[0]["input"], "こんにちは")
 
+    def test_openai_reply_rejects_empty_text_without_calling_api(self) -> None:
+        responses = FakeResponses()
+        client = SimpleNamespace(responses=responses)
+        generator = OpenAIReplyGenerator(client=client)
+
+        with self.assertRaisesRegex(ValueError, "empty text"):
+            generator.reply("   ")
+
+        self.assertEqual(responses.calls, [])
+
     def test_prompt_contains_child_safety_boundaries(self) -> None:
         self.assertIn("AI", BUDDY_INSTRUCTIONS)
         self.assertIn("個人情報", BUDDY_INSTRUCTIONS)

@@ -78,6 +78,12 @@ python -m robot.transcribe_cli record \
   --reply-backend openai
 ```
 
+`transcript=not-found`の場合は、録音内容を再生してマイク入力を確認する。
+
+```sh
+aplay -D plughw:2,0 captures/audio/transcription-input.wav
+```
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。

@@ -1,10 +1,13 @@
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from robot.audio import generate_tone
-from robot.transcribe_cli import build_parser, create_transcriber
+from robot.transcribe_cli import build_parser, create_transcriber, main
 from robot.transcription import (
     DEFAULT_TRANSCRIPTION_MODEL,
     MockTranscriber,
@@ -65,6 +68,27 @@ class TranscriptionTest(unittest.TestCase):
         )
 
         self.assertIsInstance(transcriber, MockTranscriber)
+
+    def test_empty_transcript_skips_reply_generation(self) -> None:
+        output = StringIO()
+        argv = [
+            "robot.transcribe_cli",
+            "file",
+            "unused.wav",
+            "--backend",
+            "mock",
+            "--mock-text",
+            "",
+            "--reply-backend",
+            "openai",
+        ]
+
+        with patch("sys.argv", argv), redirect_stdout(output):
+            result = main()
+
+        self.assertEqual(result, 0)
+        self.assertIn("transcript=not-found", output.getvalue())
+        self.assertIn("reply=skipped reason=empty-transcript", output.getvalue())
 
 
 if __name__ == "__main__":

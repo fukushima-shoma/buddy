@@ -160,6 +160,14 @@ python -m robot.transcribe_cli record \
 の短い日本語に制限し、個人情報を尋ねず、危険な相談は信頼できる大人へ誘導する。
 この段階では会話履歴を保存しない。
 
+`transcript=not-found`と表示された場合は音声を認識できていない。返答APIは呼び出さず、
+`reply=skipped reason=empty-transcript`と表示して安全に終了する。マイクに近づいて話すか、
+次のコマンドで録音内容を再生して入力音量を確認する。
+
+```sh
+aplay -D plughw:2,0 captures/audio/transcription-input.wav
+```
+
 ## 安全上の注意
 
 - 最初は音量を小さくする。
