@@ -281,13 +281,13 @@ python -m robot.conversation_loop_cli \
 
 ### 呼びかけで会話を始める
 
-`--start-trigger wakeword`では、PorcupineがEMEETの16kHzモノラル音声を
+`--start-trigger wakeword`では、VoskがEMEETの16kHzモノラル音声を
 Raspberry Pi内で処理し、「ねえ、バディ」を検出した場合だけ会話状態へ移る。
 検出時は短い起動音を鳴らしてマイクを会話録音へ引き渡し、指定ターン後は再び
 ウェイクワード待機へ戻る。待機中の音声はWAVへ保存せずOpenAI APIにも送信しない。
 
-日本語ではカスタムキーワードの`.ppn`に加え、日本語パラメータの
-`porcupine_params_ja.pv`が必要になる。作成手順、AccessKeyの設定、実行コマンドは
+AccessKeyは不要。約48MBの軽量日本語モデルを一度ダウンロードして展開し、その
+ディレクトリを`--wake-word-model`へ指定する。導入手順と実行コマンドは
 `docs/commands.md`の「『ねえ、バディ』で会話を始める」を参照する。
 
 ### 3歳半向け会話モード（保護者同席の試験用）

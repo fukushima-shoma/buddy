@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from array import array
 from collections.abc import Callable
 from enum import Enum
-import os
+import json
 from pathlib import Path
 import subprocess
-import sys
 from typing import Any, Protocol
 
 
 DEFAULT_CONVERSATION_BUTTON_PIN = 17
+DEFAULT_WAKE_PHRASE = "ねえ バディ"
 
 
 class InteractionState(str, Enum):
@@ -77,64 +76,82 @@ class GpioButtonStartTrigger:
         self._button.close()
 
 
-class PorcupineWakeWordTrigger:
+def normalize_wake_phrase(text: str) -> str:
+    return "".join(
+        character for character in text.casefold() if character.isalnum()
+    )
+
+
+def wake_phrase_detected(payload: str, targets: tuple[str, ...]) -> bool:
+    try:
+        result = json.loads(payload)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(result, dict):
+        return False
+    text = result.get("partial") or result.get("text") or ""
+    normalized = normalize_wake_phrase(str(text))
+    return bool(normalized) and any(target in normalized for target in targets)
+
+
+class VoskWakeWordTrigger:
     name = "wakeword"
 
     def __init__(
         self,
         *,
         device: str = "default",
-        keyword_path: Path | None = None,
         model_path: Path | None = None,
-        sensitivity: float = 0.5,
-        access_key: str | None = None,
-        engine: Any | None = None,
+        phrase: str = DEFAULT_WAKE_PHRASE,
+        sample_rate: int = 16000,
+        chunk_duration: float = 0.1,
+        recognizer: Any | None = None,
         process_factory: Callable[..., Any] = subprocess.Popen,
     ) -> None:
-        if not 0.0 <= sensitivity <= 1.0:
-            raise ValueError("wake word sensitivity must be between 0.0 and 1.0")
-        if engine is None:
-            access_key = access_key or os.environ.get("PICOVOICE_ACCESS_KEY")
-            if not access_key:
-                raise RuntimeError(
-                    "PICOVOICE_ACCESS_KEY is not set. Export it before using "
-                    "the wake word trigger."
-                )
-            if keyword_path is None:
+        phrase = phrase.strip()
+        if not phrase:
+            raise ValueError("wake word phrase must not be empty")
+        if sample_rate <= 0:
+            raise ValueError("wake word sample rate must be greater than zero")
+        if chunk_duration <= 0:
+            raise ValueError("wake word chunk duration must be greater than zero")
+
+        self._model: Any | None = None
+        if recognizer is None:
+            if model_path is None:
                 raise RuntimeError(
                     "--wake-word-model is required for the wake word trigger."
                 )
-            if model_path is None:
-                raise RuntimeError(
-                    "--wake-word-language-model is required for Japanese wake words."
-                )
-            keyword_path = keyword_path.expanduser().resolve()
             model_path = model_path.expanduser().resolve()
-            if not keyword_path.is_file():
-                raise RuntimeError(f"Wake word model not found: {keyword_path}")
-            if not model_path.is_file():
-                raise RuntimeError(f"Porcupine language model not found: {model_path}")
+            if not model_path.is_dir():
+                raise RuntimeError(f"Vosk model directory not found: {model_path}")
             try:
-                import pvporcupine
+                import vosk
             except ImportError as exc:
                 raise RuntimeError(
-                    "pvporcupine is required. Activate .venv and run: "
+                    "vosk is required. Activate .venv and run: "
                     "python -m pip install -r requirements-phase3.txt"
                 ) from exc
-            engine = pvporcupine.create(
-                access_key=access_key,
-                keyword_paths=[str(keyword_path)],
-                model_path=str(model_path),
-                sensitivities=[sensitivity],
+            vosk.SetLogLevel(-1)
+            self._model = vosk.Model(str(model_path))
+            grammar = json.dumps([phrase, "[unk]"], ensure_ascii=False)
+            recognizer = vosk.KaldiRecognizer(
+                self._model,
+                sample_rate,
+                grammar,
             )
+
         self.device = device
-        self._engine = engine
+        self.phrase = phrase
+        self.sample_rate = sample_rate
+        self._chunk_bytes = max(1, round(sample_rate * chunk_duration)) * 2
+        self._targets = (normalize_wake_phrase(phrase),)
+        self._recognizer = recognizer
         self._process_factory = process_factory
 
     def wait(self) -> bool:
-        if self._engine is None:
+        if self._recognizer is None:
             raise RuntimeError("Wake word trigger is already closed.")
-        frame_bytes = self._engine.frame_length * 2
         command = [
             "arecord",
             "--quiet",
@@ -145,7 +162,7 @@ class PorcupineWakeWordTrigger:
             "-f",
             "S16_LE",
             "-r",
-            str(self._engine.sample_rate),
+            str(self.sample_rate),
             "-t",
             "raw",
         ]
@@ -158,14 +175,16 @@ class PorcupineWakeWordTrigger:
             if process.stdout is None:
                 raise RuntimeError("arecord did not provide an audio stream")
             while True:
-                chunk = process.stdout.read(frame_bytes)
-                if len(chunk) != frame_bytes:
+                chunk = process.stdout.read(self._chunk_bytes)
+                if len(chunk) != self._chunk_bytes:
                     raise RuntimeError("arecord stopped while waiting for wake word")
-                samples = array("h")
-                samples.frombytes(chunk)
-                if sys.byteorder != "little":
-                    samples.byteswap()
-                if self._engine.process(samples.tolist()) >= 0:
+                completed = self._recognizer.AcceptWaveform(chunk)
+                payload = (
+                    self._recognizer.Result()
+                    if completed
+                    else self._recognizer.PartialResult()
+                )
+                if wake_phrase_detected(payload, self._targets):
                     return True
         finally:
             if process.poll() is None:
@@ -177,9 +196,8 @@ class PorcupineWakeWordTrigger:
                     process.wait()
 
     def close(self) -> None:
-        if self._engine is not None:
-            self._engine.delete()
-            self._engine = None
+        self._recognizer = None
+        self._model = None
 
 
 def create_start_trigger(
@@ -188,19 +206,17 @@ def create_start_trigger(
     button_pin: int = DEFAULT_CONVERSATION_BUTTON_PIN,
     wake_word_device: str = "default",
     wake_word_model: Path | None = None,
-    wake_word_language_model: Path | None = None,
-    wake_word_sensitivity: float = 0.5,
+    wake_phrase: str = DEFAULT_WAKE_PHRASE,
 ) -> StartTrigger:
     if backend == "keyboard":
         return KeyboardStartTrigger()
     if backend == "gpio":
         return GpioButtonStartTrigger(button_pin)
     if backend == "wakeword":
-        return PorcupineWakeWordTrigger(
+        return VoskWakeWordTrigger(
             device=wake_word_device,
-            keyword_path=wake_word_model,
-            model_path=wake_word_language_model,
-            sensitivity=wake_word_sensitivity,
+            model_path=wake_word_model,
+            phrase=wake_phrase,
         )
     raise ValueError(f"Unknown start trigger: {backend}")
 

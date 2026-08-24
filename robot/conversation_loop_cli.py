@@ -16,6 +16,7 @@ from robot.audio_cli import create_player, create_recorder
 from robot.conversation import DEFAULT_REPLY_MODEL, ReplyGenerator
 from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
+    DEFAULT_WAKE_PHRASE,
     create_start_trigger,
     run_interaction_station,
 )
@@ -144,18 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--wake-word-model",
         type=Path,
-        help="Path to the custom Porcupine .ppn keyword model.",
+        help="Path to the extracted Japanese Vosk model directory.",
     )
     parser.add_argument(
-        "--wake-word-language-model",
-        type=Path,
-        help="Path to porcupine_params_ja.pv for Japanese detection.",
-    )
-    parser.add_argument(
-        "--wake-word-sensitivity",
-        type=float,
-        default=0.5,
-        help="Wake word sensitivity from 0.0 to 1.0.",
+        "--wake-phrase",
+        default=DEFAULT_WAKE_PHRASE,
+        help=f"Local wake phrase (default: {DEFAULT_WAKE_PHRASE}).",
     )
     parser.add_argument(
         "--wake-word-device",
@@ -335,8 +330,7 @@ def main() -> int:
         button_pin=args.button_pin,
         wake_word_device=args.wake_word_device or args.audio_device,
         wake_word_model=args.wake_word_model,
-        wake_word_language_model=args.wake_word_language_model,
-        wake_word_sensitivity=args.wake_word_sensitivity,
+        wake_phrase=args.wake_phrase,
     )
     reset_context = getattr(reply_generator, "reset_context", None)
     wake_chime: Path | None = None

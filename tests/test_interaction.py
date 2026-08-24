@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import unittest
-from array import array
 import subprocess
 
 from robot.interaction import (
     GpioButtonStartTrigger,
     KeyboardStartTrigger,
-    PorcupineWakeWordTrigger,
+    VoskWakeWordTrigger,
+    normalize_wake_phrase,
     run_interaction_station,
+    wake_phrase_detected,
 )
 
 
@@ -42,22 +43,22 @@ class FakeButton:
         self.closed = True
 
 
-class FakeWakeWordEngine:
-    frame_length = 4
-    sample_rate = 16000
-
+class FakeWakeWordRecognizer:
     def __init__(self) -> None:
         self.calls = 0
-        self.deleted = False
 
-    def process(self, samples: list[int]) -> int:
-        if len(samples) != self.frame_length:
-            raise AssertionError("unexpected frame length")
+    def AcceptWaveform(self, chunk: bytes) -> bool:
+        if len(chunk) != 3200:
+            raise AssertionError("unexpected audio frame size")
         self.calls += 1
-        return 0 if self.calls == 2 else -1
+        return False
 
-    def delete(self) -> None:
-        self.deleted = True
+    def PartialResult(self) -> str:
+        text = "ねえ バディ" if self.calls == 2 else "ねえ"
+        return f'{{"partial": "{text}"}}'
+
+    def Result(self) -> str:
+        return '{"text": ""}'
 
 
 class FakeAudioProcess:
@@ -111,8 +112,8 @@ class InteractionTest(unittest.TestCase):
         self.assertTrue(button.closed)
 
     def test_wake_word_reads_alsa_frames_until_detected(self) -> None:
-        engine = FakeWakeWordEngine()
-        frame = array("h", [1, 2, 3, 4]).tobytes()
+        recognizer = FakeWakeWordRecognizer()
+        frame = bytes(3200)
         process = FakeAudioProcess([frame, frame])
         commands: list[list[str]] = []
 
@@ -121,17 +122,16 @@ class InteractionTest(unittest.TestCase):
             self.assertEqual(kwargs["stdout"], subprocess.PIPE)
             return process
 
-        trigger = PorcupineWakeWordTrigger(
+        trigger = VoskWakeWordTrigger(
             device="plughw:2,0",
-            engine=engine,
+            recognizer=recognizer,
             process_factory=factory,
         )
 
         self.assertTrue(trigger.wait())
         trigger.close()
 
-        self.assertEqual(engine.calls, 2)
-        self.assertTrue(engine.deleted)
+        self.assertEqual(recognizer.calls, 2)
         self.assertTrue(process.terminated)
         self.assertEqual(
             commands[0][0:4],
@@ -139,12 +139,21 @@ class InteractionTest(unittest.TestCase):
         )
         self.assertIn("16000", commands[0])
 
-    def test_wake_word_sensitivity_range_is_validated(self) -> None:
-        with self.assertRaisesRegex(ValueError, "sensitivity"):
-            PorcupineWakeWordTrigger(
-                engine=FakeWakeWordEngine(),
-                sensitivity=1.1,
+    def test_wake_word_phrase_must_not_be_empty(self) -> None:
+        with self.assertRaisesRegex(ValueError, "phrase"):
+            VoskWakeWordTrigger(
+                recognizer=FakeWakeWordRecognizer(),
+                phrase="  ",
             )
+
+    def test_wake_word_payload_ignores_spacing_and_punctuation(self) -> None:
+        targets = (normalize_wake_phrase("ねえ バディ"),)
+
+        self.assertTrue(
+            wake_phrase_detected('{"partial": "ねえ、バディ！"}', targets)
+        )
+        self.assertFalse(wake_phrase_detected("not-json", targets))
+        self.assertFalse(wake_phrase_detected("[]", targets))
 
     def test_station_transitions_and_resets_each_session(self) -> None:
         trigger = SequenceTrigger([True, True, False])
