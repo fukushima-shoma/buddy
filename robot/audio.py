@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from array import array
+from collections import deque
 from dataclasses import dataclass
 import math
 from pathlib import Path
 import struct
 import subprocess
-from typing import Callable, Protocol, Sequence
+import sys
+from typing import Any, Callable, Protocol, Sequence
 import wave
 
 
@@ -39,6 +42,10 @@ class AudioPlayer(Protocol):
         """Play a WAV file and return after playback finishes."""
 
 
+class NoSpeechDetectedError(RuntimeError):
+    """Raised when voice-activated recording times out before speech starts."""
+
+
 def _write_mono_pcm16(output: Path, sample_rate: int, samples: Sequence[int]) -> Path:
     output = output.expanduser()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -48,6 +55,32 @@ def _write_mono_pcm16(output: Path, sample_rate: int, samples: Sequence[int]) ->
         wav_file.setframerate(max(1, sample_rate))
         wav_file.writeframes(b"".join(struct.pack("<h", sample) for sample in samples))
     return output
+
+
+def _write_mono_pcm16_chunks(
+    output: Path,
+    sample_rate: int,
+    chunks: Sequence[bytes],
+) -> Path:
+    output = output.expanduser()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(output), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(max(1, sample_rate))
+        wav_file.writeframes(b"".join(chunks))
+    return output
+
+
+def pcm16_rms(chunk: bytes) -> float:
+    usable = len(chunk) - (len(chunk) % 2)
+    if usable == 0:
+        return 0.0
+    samples = array("h")
+    samples.frombytes(chunk[:usable])
+    if sys.byteorder != "little":
+        samples.byteswap()
+    return math.sqrt(sum(sample * sample for sample in samples) / len(samples))
 
 
 def generate_tone(
@@ -135,6 +168,107 @@ class AlsaAudioRecorder:
         ]
         self._runner(command, check=True)
         return output
+
+
+class AlsaVoiceActivatedRecorder:
+    def __init__(
+        self,
+        device: str = "default",
+        *,
+        threshold: float = 500.0,
+        silence_duration: float = 0.8,
+        max_wait: float = 10.0,
+        pre_roll: float = 0.3,
+        chunk_duration: float = 0.1,
+        process_factory: Callable[..., Any] = subprocess.Popen,
+    ) -> None:
+        self.device = device
+        self.threshold = max(0.0, threshold)
+        self.silence_duration = max(0.1, silence_duration)
+        self.max_wait = max(0.1, max_wait)
+        self.pre_roll = max(0.0, pre_roll)
+        self.chunk_duration = max(0.02, chunk_duration)
+        self._process_factory = process_factory
+
+    def record(
+        self,
+        output: Path,
+        *,
+        duration: float,
+        sample_rate: int,
+    ) -> Path:
+        sample_rate = max(1, sample_rate)
+        duration = max(self.chunk_duration, duration)
+        chunk_frames = max(1, round(sample_rate * self.chunk_duration))
+        chunk_bytes = chunk_frames * 2
+        wait_chunks = max(1, math.ceil(self.max_wait / self.chunk_duration))
+        record_chunks = max(1, math.ceil(duration / self.chunk_duration))
+        trailing_chunks = max(
+            1, math.ceil(self.silence_duration / self.chunk_duration)
+        )
+        pre_roll_chunks = max(1, math.ceil(self.pre_roll / self.chunk_duration))
+        buffered: deque[bytes] = deque(maxlen=pre_roll_chunks)
+        captured: list[bytes] = []
+        command = [
+            "arecord",
+            "--quiet",
+            "-D",
+            self.device,
+            "-c",
+            "1",
+            "-f",
+            "S16_LE",
+            "-r",
+            str(sample_rate),
+            "-t",
+            "raw",
+        ]
+        process = self._process_factory(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        started = False
+        waited = 0
+        after_start = 0
+        silent = 0
+        try:
+            if process.stdout is None:
+                raise RuntimeError("arecord did not provide an audio stream")
+            while True:
+                chunk = process.stdout.read(chunk_bytes)
+                if len(chunk) != chunk_bytes:
+                    raise RuntimeError("arecord stopped before recording completed")
+                level = pcm16_rms(chunk)
+                if not started:
+                    buffered.append(chunk)
+                    waited += 1
+                    if level >= self.threshold:
+                        started = True
+                        captured.extend(buffered)
+                        after_start = 1
+                        if after_start >= record_chunks:
+                            break
+                    elif waited >= wait_chunks:
+                        raise NoSpeechDetectedError(
+                            f"No speech detected within {self.max_wait:.1f}s"
+                        )
+                    continue
+
+                captured.append(chunk)
+                after_start += 1
+                silent = silent + 1 if level < self.threshold else 0
+                if silent >= trailing_chunks or after_start >= record_chunks:
+                    break
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+        return _write_mono_pcm16_chunks(output, sample_rate, captured)
 
 
 class AlsaAudioPlayer:

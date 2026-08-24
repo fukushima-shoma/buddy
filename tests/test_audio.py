@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from array import array
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -6,15 +9,54 @@ import unittest
 from robot.audio import (
     AlsaAudioPlayer,
     AlsaAudioRecorder,
+    AlsaVoiceActivatedRecorder,
     MockAudioPlayer,
     MockAudioRecorder,
+    NoSpeechDetectedError,
     generate_tone,
     inspect_wav,
+    pcm16_rms,
 )
 from robot.audio_cli import build_parser
 
 
 class AudioTest(unittest.TestCase):
+    class FakeStdout:
+        def __init__(self, chunks: list[bytes]) -> None:
+            self.chunks = list(chunks)
+
+        def read(self, size: int) -> bytes:
+            if not self.chunks:
+                return b""
+            chunk = self.chunks.pop(0)
+            if len(chunk) != size:
+                raise AssertionError(f"expected {size} bytes, got {len(chunk)}")
+            return chunk
+
+    class FakeProcess:
+        def __init__(self, chunks: list[bytes]) -> None:
+            self.stdout = AudioTest.FakeStdout(chunks)
+            self.running = True
+            self.terminated = False
+
+        def poll(self) -> int | None:
+            return None if self.running else 0
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.running = False
+
+        def wait(self, timeout: float | None = None) -> int:
+            self.running = False
+            return 0
+
+        def kill(self) -> None:
+            self.running = False
+
+    @staticmethod
+    def pcm_chunk(level: int, frames: int = 100) -> bytes:
+        return array("h", [level] * frames).tobytes()
+
     def test_generates_inspectable_test_tone(self) -> None:
         with TemporaryDirectory() as directory:
             output = Path(directory) / "tone.wav"
@@ -70,6 +112,59 @@ class AudioTest(unittest.TestCase):
         self.assertEqual(record.backend, "mock")
         self.assertEqual(record.sample_rate, 16000)
         self.assertEqual(play.backend, "mock")
+
+    def test_pcm16_rms_measures_sample_level(self) -> None:
+        self.assertEqual(pcm16_rms(self.pcm_chunk(0)), 0.0)
+        self.assertAlmostEqual(pcm16_rms(self.pcm_chunk(1200)), 1200.0)
+
+    def test_voice_activated_recorder_stops_after_trailing_silence(self) -> None:
+        with TemporaryDirectory() as directory:
+            chunks = [
+                self.pcm_chunk(0),
+                self.pcm_chunk(1000),
+                self.pcm_chunk(1200),
+                self.pcm_chunk(0),
+                self.pcm_chunk(0),
+            ]
+            process = self.FakeProcess(chunks)
+            commands: list[list[str]] = []
+
+            def factory(command: list[str], **kwargs: object) -> AudioTest.FakeProcess:
+                commands.append(command)
+                self.assertEqual(kwargs["stdout"], subprocess.PIPE)
+                return process
+
+            output = Path(directory) / "voice.wav"
+            recorder = AlsaVoiceActivatedRecorder(
+                device="plughw:2,0",
+                threshold=500,
+                silence_duration=0.2,
+                max_wait=1,
+                pre_roll=0.1,
+                chunk_duration=0.1,
+                process_factory=factory,
+            )
+
+            result = recorder.record(output, duration=2, sample_rate=1000)
+
+            self.assertEqual(result, output)
+            self.assertAlmostEqual(inspect_wav(output).duration, 0.4)
+            self.assertIn("raw", commands[0])
+            self.assertTrue(process.terminated)
+
+    def test_voice_activated_recorder_times_out_without_speech(self) -> None:
+        process = self.FakeProcess([self.pcm_chunk(0), self.pcm_chunk(0)])
+        recorder = AlsaVoiceActivatedRecorder(
+            threshold=500,
+            max_wait=0.2,
+            chunk_duration=0.1,
+            process_factory=lambda *args, **kwargs: process,
+        )
+
+        with self.assertRaises(NoSpeechDetectedError):
+            recorder.record(Path("unused.wav"), duration=1, sample_rate=1000)
+
+        self.assertTrue(process.terminated)
 
 
 if __name__ == "__main__":

@@ -116,7 +116,7 @@ python -m robot.transcribe_cli record \
 
 ```sh
 python -m robot.conversation_loop_cli \
-  --audio-backend alsa \
+  --audio-backend alsa-vad \
   --audio-device plughw:2,0 \
   --transcription-backend openai \
   --reply-backend openai \
@@ -126,7 +126,10 @@ python -m robot.conversation_loop_cli \
   --turns 0
 ```
 
-`--turns 2`なら2回で終了する。各ターンは独立しており、会話履歴は保持しない。
+`turn=N listening=true`の後に話すと、発話後0.8秒の無音で応答へ進む。10秒間発話が
+なければAPIを呼ばず次へ進む。`--turns 2`なら2回で終了する。声を拾わない場合は
+`--speech-threshold 300`、雑音を拾う場合は`--speech-threshold 800`を試す。各ターンは
+独立しており、会話履歴は保持しない。
 
 ## モーター単体テスト
 

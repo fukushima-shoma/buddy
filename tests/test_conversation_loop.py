@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from robot.audio import MockAudioPlayer, MockAudioRecorder
+from robot.audio import MockAudioPlayer, MockAudioRecorder, NoSpeechDetectedError
 from robot.conversation import MockReplyGenerator
 from robot.conversation_loop_cli import build_parser, run_conversation_loop
 from robot.speech import MockSpeechSynthesizer
@@ -28,6 +28,17 @@ class InterruptingRecorder(MockAudioRecorder):
             duration=duration,
             sample_rate=sample_rate,
         )
+
+
+class NoSpeechRecorder(MockAudioRecorder):
+    def record(
+        self,
+        output: Path,
+        *,
+        duration: float,
+        sample_rate: int,
+    ) -> Path:
+        raise NoSpeechDetectedError("no speech")
 
 
 class ConversationLoopTest(unittest.TestCase):
@@ -143,6 +154,36 @@ class ConversationLoopTest(unittest.TestCase):
                 turns=-1,
                 pause=0,
             )
+
+    def test_vad_timeout_skips_all_openai_style_processing(self) -> None:
+        logs: list[str] = []
+        reply_generator = MockReplyGenerator()
+
+        completed = run_conversation_loop(
+            recorder=NoSpeechRecorder(),
+            transcriber=MockTranscriber("should-not-run"),
+            reply_generator=reply_generator,
+            synthesizer=MockSpeechSynthesizer(),
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            output=logs.append,
+        )
+
+        self.assertEqual(completed, 1)
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(
+            logs,
+            [
+                "turn=1 listening=true",
+                "turn=1 transcript=not-found reason=no-speech",
+            ],
+        )
 
 
 if __name__ == "__main__":

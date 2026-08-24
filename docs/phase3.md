@@ -206,7 +206,7 @@ python -m robot.transcribe_cli record \
 
 ```sh
 python -m robot.conversation_loop_cli \
-  --audio-backend alsa \
+  --audio-backend alsa-vad \
   --audio-device plughw:2,0 \
   --transcription-backend openai \
   --reply-backend openai \
@@ -216,8 +216,13 @@ python -m robot.conversation_loop_cli \
   --turns 0
 ```
 
-各ターンは5秒録音する。有限回だけ試す場合は`--turns 2`のように指定する。
-現在は各ターンが独立しており、以前の会話内容は次の返答へ渡さない。
+`turn=N listening=true`が出たら話し始める。音量がしきい値を超えると録音を開始し、
+発話後0.8秒の無音で自動的に応答へ進む。10秒間発話がなければAPIを呼ばず、次の
+ターンへ移る。`--duration 5`は発話開始後の最大録音時間になる。
+
+有限回だけ試す場合は`--turns 2`のように指定する。声を検知しない場合は
+`--speech-threshold 300`、周囲の音へ反応する場合は`--speech-threshold 800`のように
+調整する。現在は各ターンが独立しており、以前の会話内容は次の返答へ渡さない。
 
 ## 安全上の注意
 

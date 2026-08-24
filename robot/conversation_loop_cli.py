@@ -5,7 +5,12 @@ from pathlib import Path
 import time
 from typing import Callable
 
-from robot.audio import AudioPlayer, AudioRecorder
+from robot.audio import (
+    AlsaVoiceActivatedRecorder,
+    AudioPlayer,
+    AudioRecorder,
+    NoSpeechDetectedError,
+)
 from robot.audio_cli import create_player, create_recorder
 from robot.conversation import DEFAULT_REPLY_MODEL, ReplyGenerator
 from robot.reply_cli import create_reply_generator
@@ -24,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Repeat Buddy's record, reply, and playback cycle."
     )
     parser.add_argument(
-        "--audio-backend", choices=("mock", "alsa"), default="mock"
+        "--audio-backend", choices=("mock", "alsa", "alsa-vad"), default="mock"
     )
     parser.add_argument("--audio-device", default="default")
     parser.add_argument(
@@ -34,6 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--duration", type=float, default=5.0)
     parser.add_argument("--sample-rate", type=int, default=16000)
+    parser.add_argument("--speech-threshold", type=float, default=500.0)
+    parser.add_argument("--silence-duration", type=float, default=0.8)
+    parser.add_argument("--max-wait", type=float, default=10.0)
+    parser.add_argument("--pre-roll", type=float, default=0.3)
     parser.add_argument(
         "--transcription-backend", choices=("mock", "openai"), default="mock"
     )
@@ -100,11 +109,17 @@ def run_conversation_loop(
             if completed_turns > 0 and pause > 0:
                 sleeper(pause)
             turn = completed_turns + 1
-            source = recorder.record(
-                input_path,
-                duration=duration,
-                sample_rate=sample_rate,
-            )
+            output(f"turn={turn} listening=true")
+            try:
+                source = recorder.record(
+                    input_path,
+                    duration=duration,
+                    sample_rate=sample_rate,
+                )
+            except NoSpeechDetectedError:
+                output(f"turn={turn} transcript=not-found reason=no-speech")
+                completed_turns += 1
+                continue
             output(f"turn={turn} recorded={source}")
 
             transcript = transcriber.transcribe(source, language=language)
@@ -128,7 +143,16 @@ def run_conversation_loop(
 
 def main() -> int:
     args = build_parser().parse_args()
-    recorder = create_recorder(args.audio_backend, args.audio_device)
+    if args.audio_backend == "alsa-vad":
+        recorder = AlsaVoiceActivatedRecorder(
+            device=args.audio_device,
+            threshold=args.speech_threshold,
+            silence_duration=args.silence_duration,
+            max_wait=args.max_wait,
+            pre_roll=args.pre_roll,
+        )
+    else:
+        recorder = create_recorder(args.audio_backend, args.audio_device)
     transcriber = create_transcriber(
         args.transcription_backend,
         model=args.transcription_model,
