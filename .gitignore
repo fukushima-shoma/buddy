@@ -1,4 +1,8 @@
 captures/
 models/person_detection/
+.env
+.env.*
+!.env.example
+.venv/
 __pycache__/
 *.py[cod]

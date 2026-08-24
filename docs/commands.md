@@ -40,6 +40,26 @@ python3 -m robot.audio_cli record --backend mock --duration 3
 python3 -m robot.audio_cli play captures/audio/recording.wav --backend mock
 ```
 
+録音済みWAVをOpenAI APIで日本語文字起こしする。
+
+```sh
+python -m robot.transcribe_cli file \
+  captures/audio/microphone-test.wav \
+  --backend openai \
+  --language ja
+```
+
+EMEETで5秒録音し、そのまま文字起こしする。
+
+```sh
+python -m robot.transcribe_cli record \
+  --audio-backend alsa \
+  --device plughw:2,0 \
+  --duration 5 \
+  --backend openai \
+  --language ja
+```
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。

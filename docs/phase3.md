@@ -72,7 +72,7 @@ python3 -m robot.audio_cli play \
 python3 -m robot.audio_cli play \
   captures/audio/tone.wav \
   --backend alsa \
-  --device hw:2,0
+  --device plughw:2,0
 ```
 
 ## Step 5: ALSAで録音する
@@ -80,6 +80,7 @@ python3 -m robot.audio_cli play \
 ```sh
 python3 -m robot.audio_cli record \
   --backend alsa \
+  --device plughw:2,0 \
   --output captures/audio/microphone-test.wav \
   --duration 5
 ```
@@ -89,8 +90,48 @@ python3 -m robot.audio_cli record \
 ```sh
 python3 -m robot.audio_cli play \
   captures/audio/microphone-test.wav \
-  --backend alsa
+  --backend alsa \
+  --device plughw:2,0
 ```
+
+## Step 6: OpenAI APIで音声を文字にする
+
+OpenAI Python SDKを仮想環境へ導入する。
+
+```sh
+python -m pip install -r requirements-phase3.txt
+```
+
+APIキーはコードや`.env`へ書かず、シェルの環境変数へ設定する。
+
+```sh
+read -s -p "OpenAI API key: " OPENAI_API_KEY
+echo
+export OPENAI_API_KEY
+```
+
+録音済みWAVを文字起こしする。`--backend openai`を明示したときだけAPIを呼び出す。
+
+```sh
+python -m robot.transcribe_cli file \
+  captures/audio/microphone-test.wav \
+  --backend openai \
+  --language ja
+```
+
+録音と文字起こしを1コマンドで行う。
+
+```sh
+python -m robot.transcribe_cli record \
+  --audio-backend alsa \
+  --device plughw:2,0 \
+  --duration 5 \
+  --backend openai \
+  --language ja
+```
+
+既定の文字起こしモデルは`gpt-4o-mini-transcribe`。APIキーをGitへ保存せず、
+認識対象の音声だけをOpenAI APIへ送信する。
 
 ## 安全上の注意
 
@@ -101,11 +142,11 @@ python3 -m robot.audio_cli play \
 
 ## Phase3 Checklist
 
-- [ ] テストWAVを生成・検査
-- [ ] モック録音・再生
-- [ ] USBスピーカーフォンをOSが認識
-- [ ] テスト音を実機再生
-- [ ] マイク録音と再生
+- [x] テストWAVを生成・検査
+- [x] モック録音・再生
+- [x] USBスピーカーフォンをOSが認識
+- [x] テスト音を実機再生
+- [x] マイク録音と再生
 - [ ] 音声認識
 - [ ] 返答生成
 - [ ] 音声合成
