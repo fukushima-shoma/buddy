@@ -127,6 +127,7 @@ python -m robot.conversation_loop_cli \
   --transcription-backend openai \
   --reply-backend openai \
   --memory session \
+  --memory-turns 30 \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa \
@@ -137,7 +138,7 @@ python -m robot.conversation_loop_cli \
 `turn=N listening=true`の後に話すと、発話後0.8秒の無音で応答へ進む。10秒間発話が
 なければAPIを呼ばず次へ進む。`--turns 2`なら2回で終了する。声を拾わない場合は
 `--speech-threshold 300`、雑音を拾う場合は`--speech-threshold 800`を試す。
-`--memory session`は会話の文脈を引き継ぎ、既定では6返答ごとにリセットする。
+`--memory session`は会話の文脈を引き継ぎ、既定では30返答ごとにリセットする。
 文字の履歴ファイルは作らないが、最新ターンの入出力WAVは保存される。
 会話中に「バイバイ」「またね」「さようなら」「おしまい」のいずれかを単独で話すと、
 Buddyがお別れを返して、その会話セッションを指定ターン数より前に終了する。
@@ -243,18 +244,19 @@ python -m robot.conversation_loop_cli \
   --transcription-backend openai \
   --reply-backend openai \
   --child-mode \
-  --memory none \
+  --memory session \
+  --memory-turns 30 \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa \
   --playback-device plughw:2,0 \
-  --turns 4 \
+  --turns 0 \
   --start-trigger wakeword \
   --wake-word-model models/wakeword/vosk-model-small-ja-0.22
 ```
 
 `state=waiting trigger=wakeword`の間に「ねえ、バディ」と呼ぶ。検出すると短い起動音が
-鳴り、`state=conversation`へ切り替わる。4ターン後は再び呼びかけ待ちへ戻る。
+鳴り、`state=conversation`へ切り替わる。会話は最大30返答分の文脈を引き継ぐ。
 会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
 標準の呼びかけは`ねえ バディ`。別の言い方を試す場合は、例えば
 `--wake-phrase バディ`を追加する。`models/wakeword/`は`.gitignore`で除外している。

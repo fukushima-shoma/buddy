@@ -14,7 +14,11 @@ from robot.audio import (
     generate_tone,
 )
 from robot.audio_cli import create_player, create_recorder
-from robot.conversation import DEFAULT_REPLY_MODEL, ReplyGenerator
+from robot.conversation import (
+    DEFAULT_MEMORY_TURNS,
+    DEFAULT_REPLY_MODEL,
+    ReplyGenerator,
+)
 from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
     DEFAULT_WAKE_PHRASE,
@@ -116,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--memory-turns",
         type=int,
-        default=6,
+        default=DEFAULT_MEMORY_TURNS,
         help="Reset session context after this many replies.",
     )
     parser.add_argument(

@@ -63,7 +63,7 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.reply_backend, "mock")
         self.assertFalse(args.child_mode)
         self.assertEqual(args.memory, "none")
-        self.assertEqual(args.memory_turns, 6)
+        self.assertEqual(args.memory_turns, 30)
         self.assertEqual(args.speech_backend, "mock")
         self.assertEqual(args.speech_style, "calm")
         self.assertEqual(args.playback_backend, "mock")

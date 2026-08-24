@@ -232,6 +232,7 @@ python -m robot.conversation_loop_cli \
   --transcription-backend openai \
   --reply-backend openai \
   --memory session \
+  --memory-turns 30 \
   --speech-backend openai \
   --playback-backend alsa \
   --playback-device plughw:2,0 \
@@ -252,7 +253,7 @@ python -m robot.conversation_loop_cli \
 
 `--memory session`を付けると、直前までの会話をOpenAI Responses APIの
 `previous_response_id`で次の返答へ引き継ぐ。Buddyの安全指示は毎ターン送信し、
-既定では6回返答すると文脈をリセットする。長さは`--memory-turns 4`のように変更できる。
+既定では30回返答すると文脈をリセットする。長さは`--memory-turns 20`のように変更できる。
 このプログラムは文字起こしや返答の履歴ファイルを作らないが、入力音声と返答音声の
 WAVには各ターンの最新内容が残る。
 

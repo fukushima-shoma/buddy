@@ -5,6 +5,7 @@ from typing import Any, Protocol
 
 
 DEFAULT_REPLY_MODEL = "gpt-5.6"
+DEFAULT_MEMORY_TURNS = 30
 BUDDY_INSTRUCTIONS = """\
 あなたは子どもや家族と会話する小型AIロボット「Buddy」です。
 自然でやさしい日本語を使い、返答は短い1〜2文にしてください。
@@ -60,7 +61,7 @@ class OpenAIReplyGenerator:
         model: str = DEFAULT_REPLY_MODEL,
         instructions: str = BUDDY_INSTRUCTIONS,
         remember_context: bool = False,
-        max_context_turns: int = 6,
+        max_context_turns: int = DEFAULT_MEMORY_TURNS,
         client: Any | None = None,
     ) -> None:
         if client is None:

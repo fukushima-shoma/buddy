@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from robot.conversation import (
+    DEFAULT_MEMORY_TURNS,
     DEFAULT_REPLY_MODEL,
     MockReplyGenerator,
     OpenAIReplyGenerator,
@@ -31,7 +32,7 @@ def create_reply_generator(
     model: str,
     mock_reply: str,
     remember_context: bool = False,
-    max_context_turns: int = 6,
+    max_context_turns: int = DEFAULT_MEMORY_TURNS,
     child_mode: bool = False,
 ) -> ReplyGenerator:
     if backend == "mock":
