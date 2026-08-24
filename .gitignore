@@ -1,5 +1,6 @@
 captures/
 models/person_detection/
+models/wakeword/
 .env
 .env.*
 !.env.example

@@ -279,6 +279,17 @@ python -m robot.conversation_loop_cli \
 有効になる。詳しい配線は`hardware/phase1-wiring.md`を参照する。会話履歴を有効に
 した場合も、新しいセッションの開始時に履歴をリセットする。
 
+### 呼びかけで会話を始める
+
+`--start-trigger wakeword`では、PorcupineがEMEETの16kHzモノラル音声を
+Raspberry Pi内で処理し、「ねえ、バディ」を検出した場合だけ会話状態へ移る。
+検出時は短い起動音を鳴らしてマイクを会話録音へ引き渡し、指定ターン後は再び
+ウェイクワード待機へ戻る。待機中の音声はWAVへ保存せずOpenAI APIにも送信しない。
+
+日本語ではカスタムキーワードの`.ppn`に加え、日本語パラメータの
+`porcupine_params_ja.pv`が必要になる。作成手順、AccessKeyの設定、実行コマンドは
+`docs/commands.md`の「『ねえ、バディ』で会話を始める」を参照する。
+
 ### 3歳半向け会話モード（保護者同席の試験用）
 
 `--child-mode`を付けると、返答を原則1文、最大でも短い2文にする。質問は一度に

@@ -10,6 +10,7 @@ from robot.audio import (
     AudioPlayer,
     AudioRecorder,
     NoSpeechDetectedError,
+    generate_tone,
 )
 from robot.audio_cli import create_player, create_recorder
 from robot.conversation import DEFAULT_REPLY_MODEL, ReplyGenerator
@@ -124,9 +125,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--start-trigger",
-        choices=("immediate", "keyboard", "gpio"),
+        choices=("immediate", "keyboard", "gpio", "wakeword"),
         default="immediate",
-        help="Start immediately, after Enter, or after a GPIO button press.",
+        help="Start immediately, after Enter, a GPIO press, or a wake word.",
     )
     parser.add_argument(
         "--button-pin",
@@ -139,6 +140,26 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="Triggered sessions to run; use 0 to wait until q or Ctrl+C.",
+    )
+    parser.add_argument(
+        "--wake-word-model",
+        type=Path,
+        help="Path to the custom Porcupine .ppn keyword model.",
+    )
+    parser.add_argument(
+        "--wake-word-language-model",
+        type=Path,
+        help="Path to porcupine_params_ja.pv for Japanese detection.",
+    )
+    parser.add_argument(
+        "--wake-word-sensitivity",
+        type=float,
+        default=0.5,
+        help="Wake word sensitivity from 0.0 to 1.0.",
+    )
+    parser.add_argument(
+        "--wake-word-device",
+        help="ALSA capture device; defaults to --audio-device.",
     )
     return parser
 
@@ -312,13 +333,32 @@ def main() -> int:
     trigger = create_start_trigger(
         args.start_trigger,
         button_pin=args.button_pin,
+        wake_word_device=args.wake_word_device or args.audio_device,
+        wake_word_model=args.wake_word_model,
+        wake_word_language_model=args.wake_word_language_model,
+        wake_word_sensitivity=args.wake_word_sensitivity,
     )
     reset_context = getattr(reply_generator, "reset_context", None)
+    wake_chime: Path | None = None
+    if args.start_trigger == "wakeword":
+        wake_chime = generate_tone(
+            Path("captures/audio/wake-chime.wav"),
+            frequency=880,
+            duration=0.12,
+            volume=0.15,
+        )
+
+    def prepare_session() -> None:
+        if callable(reset_context):
+            reset_context()
+        if wake_chime is not None:
+            player.play(wake_chime)
+
     run_interaction_station(
         trigger=trigger,
         run_session=lambda: run_session(catch_interrupt=False),
         sessions=args.sessions,
-        reset_session=reset_context if callable(reset_context) else None,
+        reset_session=prepare_session,
     )
     return 0
 

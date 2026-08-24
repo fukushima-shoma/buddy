@@ -62,6 +62,10 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.start_trigger, "immediate")
         self.assertEqual(args.button_pin, 17)
         self.assertEqual(args.sessions, 0)
+        self.assertIsNone(args.wake_word_model)
+        self.assertIsNone(args.wake_word_language_model)
+        self.assertEqual(args.wake_word_sensitivity, 0.5)
+        self.assertIsNone(args.wake_word_device)
 
     def test_two_turns_run_complete_pipeline_and_pause_once(self) -> None:
         with TemporaryDirectory() as directory:

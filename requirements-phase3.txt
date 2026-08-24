@@ -1,1 +1,2 @@
 openai>=1.0
+pvporcupine>=3.0

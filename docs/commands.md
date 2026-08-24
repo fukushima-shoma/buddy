@@ -210,6 +210,72 @@ python -m robot.conversation_loop_cli \
 会話メモリは各セッション開始時にリセットされ、前に利用した人の会話を次の人へ
 引き継がない。
 
+### 「ねえ、バディ」で会話を始める
+
+ウェイクワードはPorcupineを使ってRaspberry Pi内で検出する。待機中の音声は
+OpenAI APIへ送信せず、ウェイクワードを検出した後の会話だけを既存の文字起こしへ
+渡す。
+
+最新版の依存パッケージを仮想環境へ追加する。
+
+```sh
+python -m pip install -r requirements-phase3.txt
+```
+
+[Picovoice Console](https://console.picovoice.ai/)で取得したAccessKeyを、Gitへ保存せず
+環境変数へ設定する。
+
+```sh
+read -s -p "PICOVOICE_ACCESS_KEY: " PICOVOICE_ACCESS_KEY
+export PICOVOICE_ACCESS_KEY
+echo
+```
+
+日本語パラメータモデルを公式リポジトリから取得する。
+
+```sh
+mkdir -p models/wakeword
+curl -L \
+  https://raw.githubusercontent.com/Picovoice/porcupine/master/lib/common/porcupine_params_ja.pv \
+  -o models/wakeword/porcupine_params_ja.pv
+```
+
+「ねえ、バディ」のRaspberry Pi用キーワードモデルを作る。学習APIには句読点を
+除いた`ねえ バディ`を渡す。この処理だけはPicovoiceへ接続し、生成後の検出は
+Raspberry Pi内で行う。
+
+```sh
+python -m robot.wakeword_cli
+```
+
+`trained=...nee-buddy_ja_raspberry-pi.ppn`と表示されたら、呼びかけ開始方式で起動する。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory none \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 4 \
+  --start-trigger wakeword \
+  --wake-word-model models/wakeword/nee-buddy_ja_raspberry-pi.ppn \
+  --wake-word-language-model models/wakeword/porcupine_params_ja.pv
+```
+
+`state=waiting trigger=wakeword`の間に「ねえ、バディ」と呼ぶ。検出すると短い起動音が
+鳴り、`state=conversation`へ切り替わる。4ターン後は再び呼びかけ待ちへ戻る。
+聞き逃しが多い場合は`--wake-word-sensitivity 0.6`へ上げる。誤って起動する場合は
+`0.4`へ下げる。値を上げるほど検出しやすくなる代わりに誤検出も増える。
+
+AccessKey、`.ppn`、`.pv`はGitへ追加しない。`models/wakeword/`は`.gitignore`で除外
+している。
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。
