@@ -16,7 +16,9 @@ from robot.conversation import DEFAULT_REPLY_MODEL, ReplyGenerator
 from robot.reply_cli import create_reply_generator
 from robot.speech import (
     DEFAULT_SPEECH_MODEL,
+    DEFAULT_SPEECH_STYLE,
     DEFAULT_SPEECH_VOICE,
+    SPEECH_STYLES,
     SpeechSynthesizer,
 )
 from robot.speech_cli import create_synthesizer
@@ -71,6 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--speech-model", default=DEFAULT_SPEECH_MODEL)
     parser.add_argument("--speech-voice", default=DEFAULT_SPEECH_VOICE)
+    parser.add_argument(
+        "--speech-style", choices=SPEECH_STYLES, default=DEFAULT_SPEECH_STYLE
+    )
     parser.add_argument(
         "--speech-output",
         type=Path,
@@ -181,6 +186,7 @@ def main() -> int:
         args.speech_backend,
         model=args.speech_model,
         voice=args.speech_voice,
+        style=args.speech_style,
     )
     player = create_player(args.playback_backend, args.playback_device)
     turns = "until-Ctrl+C" if args.turns == 0 else str(args.turns)
@@ -188,7 +194,7 @@ def main() -> int:
         f"conversation-loop turns={turns} audio={args.audio_backend} "
         f"transcription={args.transcription_backend} reply={args.reply_backend} "
         f"memory={args.memory} speech={args.speech_backend} "
-        f"playback={args.playback_backend}"
+        f"speech-style={args.speech_style} playback={args.playback_backend}"
     )
     run_conversation_loop(
         recorder=recorder,

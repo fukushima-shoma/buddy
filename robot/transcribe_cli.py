@@ -7,7 +7,12 @@ from robot.audio import AlsaAudioRecorder, MockAudioRecorder
 from robot.audio_cli import create_player
 from robot.conversation import DEFAULT_REPLY_MODEL
 from robot.reply_cli import create_reply_generator
-from robot.speech import DEFAULT_SPEECH_MODEL, DEFAULT_SPEECH_VOICE
+from robot.speech import (
+    DEFAULT_SPEECH_MODEL,
+    DEFAULT_SPEECH_STYLE,
+    DEFAULT_SPEECH_VOICE,
+    SPEECH_STYLES,
+)
 from robot.speech_cli import create_synthesizer
 from robot.transcription import (
     DEFAULT_TRANSCRIPTION_MODEL,
@@ -43,6 +48,9 @@ def add_transcription_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--speech-model", default=DEFAULT_SPEECH_MODEL)
     parser.add_argument("--speech-voice", default=DEFAULT_SPEECH_VOICE)
+    parser.add_argument(
+        "--speech-style", choices=SPEECH_STYLES, default=DEFAULT_SPEECH_STYLE
+    )
     parser.add_argument(
         "--speech-output",
         type=Path,
@@ -135,11 +143,12 @@ def main() -> int:
                 args.speech_backend,
                 model=args.speech_model,
                 voice=args.speech_voice,
+                style=args.speech_style,
             )
             speech_output = synthesizer.synthesize(reply, args.speech_output)
             print(
                 f"synthesized={speech_output} backend={args.speech_backend} "
-                f"voice={args.speech_voice}"
+                f"voice={args.speech_voice} style={args.speech_style}"
             )
             if args.playback_backend != "none":
                 create_player(args.playback_backend, args.playback_device).play(

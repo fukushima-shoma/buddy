@@ -9,9 +9,38 @@ from robot.audio import generate_tone
 
 DEFAULT_SPEECH_MODEL = "gpt-4o-mini-tts"
 DEFAULT_SPEECH_VOICE = "marin"
-DEFAULT_SPEECH_INSTRUCTIONS = (
-    "自然で明るく、子どもに話しかけるような、やさしい日本語で話してください。"
-)
+DEFAULT_SPEECH_STYLE = "buddy"
+SPEECH_STYLE_INSTRUCTIONS = {
+    "buddy": (
+        "3歳くらいの子どもへ話すような、親しみのある自然な日本語で話してください。"
+        "少しゆっくり、柔らかく温かい声にしてください。単語を一語ずつ区切らず、"
+        "文章の意味に合わせて自然な抑揚をつけてください。質問の語尾は少し上げ、"
+        "嬉しい内容では控えめに明るくしてください。句読点では短く自然な間を置いて"
+        "ください。大げさなアニメ声や、幼児語を多用する話し方にはしないでください。"
+    ),
+    "cheerful": (
+        "子どもに話しかける、明るく親しみのある自然な日本語で話してください。"
+        "普段より少し弾む声色にし、嬉しい言葉を自然に強調してください。話す速さは"
+        "少しゆっくりに保ち、大げさに叫んだり、アニメ声にしたりしないでください。"
+    ),
+    "calm": (
+        "子どもを安心させる、落ち着いた温かい自然な日本語で話してください。"
+        "ゆっくりした速さと柔らかな声量で、文の意味に沿った穏やかな抑揚をつけ、"
+        "句読点では短く自然な間を置いてください。ささやき声にはしないでください。"
+    ),
+}
+SPEECH_STYLES = tuple(SPEECH_STYLE_INSTRUCTIONS)
+DEFAULT_SPEECH_INSTRUCTIONS = SPEECH_STYLE_INSTRUCTIONS[DEFAULT_SPEECH_STYLE]
+
+
+def get_speech_instructions(style: str) -> str:
+    try:
+        return SPEECH_STYLE_INSTRUCTIONS[style]
+    except KeyError as exc:
+        choices = ", ".join(SPEECH_STYLES)
+        raise ValueError(
+            f"Unsupported speech style: {style}. Choose from: {choices}."
+        ) from exc
 
 
 class SpeechSynthesizer(Protocol):

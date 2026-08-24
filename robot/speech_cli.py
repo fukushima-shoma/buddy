@@ -6,10 +6,13 @@ from pathlib import Path
 from robot.audio_cli import create_player
 from robot.speech import (
     DEFAULT_SPEECH_MODEL,
+    DEFAULT_SPEECH_STYLE,
     DEFAULT_SPEECH_VOICE,
     MockSpeechSynthesizer,
     OpenAISpeechSynthesizer,
+    SPEECH_STYLES,
     SpeechSynthesizer,
+    get_speech_instructions,
 )
 
 
@@ -19,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend", choices=("mock", "openai"), default="mock")
     parser.add_argument("--model", default=DEFAULT_SPEECH_MODEL)
     parser.add_argument("--voice", default=DEFAULT_SPEECH_VOICE)
+    parser.add_argument("--style", choices=SPEECH_STYLES, default=DEFAULT_SPEECH_STYLE)
     parser.add_argument(
         "--output", type=Path, default=Path("captures/audio/reply.wav")
     )
@@ -34,10 +38,15 @@ def create_synthesizer(
     *,
     model: str,
     voice: str,
+    style: str = DEFAULT_SPEECH_STYLE,
 ) -> SpeechSynthesizer:
     if backend == "mock":
         return MockSpeechSynthesizer()
-    return OpenAISpeechSynthesizer(model=model, voice=voice)
+    return OpenAISpeechSynthesizer(
+        model=model,
+        voice=voice,
+        instructions=get_speech_instructions(style),
+    )
 
 
 def main() -> int:
@@ -46,8 +55,12 @@ def main() -> int:
         args.backend,
         model=args.model,
         voice=args.voice,
+        style=args.style,
     ).synthesize(args.text, args.output)
-    print(f"synthesized={output} backend={args.backend} voice={args.voice}")
+    print(
+        f"synthesized={output} backend={args.backend} "
+        f"voice={args.voice} style={args.style}"
+    )
     if args.playback_backend != "none":
         create_player(args.playback_backend, args.device).play(output)
         print(f"played={output} backend={args.playback_backend}")

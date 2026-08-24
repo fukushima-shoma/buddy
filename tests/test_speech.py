@@ -6,9 +6,12 @@ from robot.audio import inspect_wav
 from robot.speech import (
     DEFAULT_SPEECH_INSTRUCTIONS,
     DEFAULT_SPEECH_MODEL,
+    DEFAULT_SPEECH_STYLE,
     DEFAULT_SPEECH_VOICE,
     MockSpeechSynthesizer,
     OpenAISpeechSynthesizer,
+    SPEECH_STYLE_INSTRUCTIONS,
+    get_speech_instructions,
 )
 from robot.speech_cli import build_parser, create_synthesizer
 
@@ -121,6 +124,19 @@ class SpeechTest(unittest.TestCase):
         self.assertEqual(args.backend, "mock")
         self.assertEqual(args.playback_backend, "none")
         self.assertEqual(args.voice, DEFAULT_SPEECH_VOICE)
+        self.assertEqual(args.style, DEFAULT_SPEECH_STYLE)
+
+    def test_speech_styles_have_distinct_instructions(self) -> None:
+        self.assertEqual(
+            get_speech_instructions("buddy"), SPEECH_STYLE_INSTRUCTIONS["buddy"]
+        )
+        self.assertNotEqual(
+            get_speech_instructions("cheerful"), get_speech_instructions("calm")
+        )
+
+    def test_unknown_speech_style_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported speech style"):
+            get_speech_instructions("unknown")
 
     def test_factory_defaults_to_mock(self) -> None:
         synthesizer = create_synthesizer(

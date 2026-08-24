@@ -90,9 +90,13 @@ OpenAI APIで文章を音声合成し、EMEETから再生する。
 python -m robot.speech_cli \
   "こんにちは。ぼくはAIロボットのBuddyだよ。" \
   --backend openai \
+  --style buddy \
   --playback-backend alsa \
   --device plughw:2,0
 ```
+
+話し方は`buddy`が既定。明るい`--style cheerful`と落ち着いた`--style calm`も
+選択できる。連続会話と`transcribe_cli`では同じ設定を`--speech-style`で指定する。
 
 録音から返答の音声再生までを続けて行う。
 
@@ -122,6 +126,7 @@ python -m robot.conversation_loop_cli \
   --reply-backend openai \
   --memory session \
   --speech-backend openai \
+  --speech-style buddy \
   --playback-backend alsa \
   --playback-device plughw:2,0 \
   --turns 0
