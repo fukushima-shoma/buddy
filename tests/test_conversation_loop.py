@@ -59,6 +59,9 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.speech_backend, "mock")
         self.assertEqual(args.speech_style, "calm")
         self.assertEqual(args.playback_backend, "mock")
+        self.assertEqual(args.start_trigger, "immediate")
+        self.assertEqual(args.button_pin, 17)
+        self.assertEqual(args.sessions, 0)
 
     def test_two_turns_run_complete_pipeline_and_pause_once(self) -> None:
         with TemporaryDirectory() as directory:

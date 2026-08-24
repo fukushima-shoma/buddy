@@ -13,6 +13,11 @@ from robot.audio import (
 )
 from robot.audio_cli import create_player, create_recorder
 from robot.conversation import DEFAULT_REPLY_MODEL, ReplyGenerator
+from robot.interaction import (
+    DEFAULT_CONVERSATION_BUTTON_PIN,
+    create_start_trigger,
+    run_interaction_station,
+)
 from robot.reply_cli import create_reply_generator
 from robot.speech import (
     DEFAULT_SPEECH_MODEL,
@@ -117,6 +122,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.5,
         help="Seconds to wait after playback before the next recording.",
     )
+    parser.add_argument(
+        "--start-trigger",
+        choices=("immediate", "keyboard", "gpio"),
+        default="immediate",
+        help="Start immediately, after Enter, or after a GPIO button press.",
+    )
+    parser.add_argument(
+        "--button-pin",
+        type=int,
+        default=DEFAULT_CONVERSATION_BUTTON_PIN,
+        help="BCM GPIO number used by the conversation button.",
+    )
+    parser.add_argument(
+        "--sessions",
+        type=int,
+        default=0,
+        help="Triggered sessions to run; use 0 to wait until q or Ctrl+C.",
+    )
     return parser
 
 
@@ -138,6 +161,7 @@ def run_conversation_loop(
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
+    catch_interrupt: bool = True,
 ) -> int:
     if turns < 0:
         raise ValueError("turns must be 0 or greater")
@@ -204,6 +228,8 @@ def run_conversation_loop(
             output(f"turn={turn} played={generated}")
             completed_turns += 1
     except KeyboardInterrupt:
+        if not catch_interrupt:
+            raise
         output("Stopping conversation loop.")
     return completed_turns
 
@@ -250,30 +276,49 @@ def main() -> int:
         f"transcription={args.transcription_backend} reply={args.reply_backend} "
         f"child-mode={'on' if args.child_mode else 'off'} "
         f"memory={args.memory} speech={args.speech_backend} "
-        f"speech-style={args.speech_style} playback={args.playback_backend}"
+        f"speech-style={args.speech_style} playback={args.playback_backend} "
+        f"start-trigger={args.start_trigger}"
     )
     if args.child_mode:
         print(
             "child-mode=supervised-test-only "
             "personal-data=do-not-share-without-required-data-controls"
         )
-    run_conversation_loop(
-        recorder=recorder,
-        transcriber=transcriber,
-        reply_generator=reply_generator,
-        synthesizer=synthesizer,
-        player=player,
-        input_path=args.input,
-        speech_output=args.speech_output,
-        duration=args.duration,
-        sample_rate=args.sample_rate,
-        language=args.language,
-        turns=args.turns,
-        pause=args.pause,
-        retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
-        reject_transcript=(
-            is_unreliable_child_transcript if args.child_mode else None
-        ),
+    def run_session(*, catch_interrupt: bool = True) -> int:
+        return run_conversation_loop(
+            recorder=recorder,
+            transcriber=transcriber,
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=player,
+            input_path=args.input,
+            speech_output=args.speech_output,
+            duration=args.duration,
+            sample_rate=args.sample_rate,
+            language=args.language,
+            turns=args.turns,
+            pause=args.pause,
+            retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
+            reject_transcript=(
+                is_unreliable_child_transcript if args.child_mode else None
+            ),
+            catch_interrupt=catch_interrupt,
+        )
+
+    if args.start_trigger == "immediate":
+        run_session()
+        return 0
+
+    trigger = create_start_trigger(
+        args.start_trigger,
+        button_pin=args.button_pin,
+    )
+    reset_context = getattr(reply_generator, "reset_context", None)
+    run_interaction_station(
+        trigger=trigger,
+        run_session=lambda: run_session(catch_interrupt=False),
+        sessions=args.sessions,
+        reset_session=reset_context if callable(reset_context) else None,
     )
     return 0
 

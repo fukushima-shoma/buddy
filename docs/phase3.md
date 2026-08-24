@@ -252,6 +252,33 @@ python -m robot.conversation_loop_cli \
 このプログラムは文字起こしや返答の履歴ファイルを作らないが、入力音声と返答音声の
 WAVには各ターンの最新内容が残る。
 
+### 待機・会話状態を切り替える
+
+`--start-trigger keyboard`を付けると、起動直後は`state=waiting`で待機し、Enterを
+押したときだけ会話を開始する。指定ターンが終わると待機へ戻る。待機中に`q`とEnterを
+入力するか、`Ctrl+C`を押すと`state=stopped`になって終了する。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory none \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 4 \
+  --start-trigger keyboard
+```
+
+押しボタンをGPIO17・物理ピン11とGNDの間に接続した後は、`keyboard`を`gpio`へ
+変更するとボタンで会話を開始できる。内部プルアップとチャタリング防止はコード側で
+有効になる。詳しい配線は`hardware/phase1-wiring.md`を参照する。会話履歴を有効に
+した場合も、新しいセッションの開始時に履歴をリセットする。
+
 ### 3歳半向け会話モード（保護者同席の試験用）
 
 `--child-mode`を付けると、返答を原則1文、最大でも短い2文にする。質問は一度に

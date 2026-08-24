@@ -164,6 +164,52 @@ python -m robot.conversation_loop_cli \
 前に、Under 18 API Guidanceに従い、Zero Data Retentionを含む必要なデータ管理を
 確認する。
 
+### 待機してから会話を始める
+
+まずは追加部品なしで、Enterキーを押すと4ターンの会話を開始する。会話が終わると
+`state=waiting`へ戻る。待機中に`q`とEnterを入力すると終了する。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory none \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 4 \
+  --start-trigger keyboard
+```
+
+GPIO17・物理ピン11とGNDの間に押しボタンを接続した場合は、開始方式を`gpio`へ
+変更する。ボタンを1回押すたびに4ターン会話し、その後は再び待機する。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory none \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 4 \
+  --start-trigger gpio \
+  --button-pin 17
+```
+
+`--sessions 1`を付けると1回の会話セッション後に終了する。省略時は、キーボードの
+`q`または`Ctrl+C`で止めるまで待機と会話を繰り返す。`--memory session`を指定しても
+会話メモリは各セッション開始時にリセットされ、前に利用した人の会話を次の人へ
+引き継がない。
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。
