@@ -139,6 +139,8 @@ python -m robot.conversation_loop_cli \
 `--speech-threshold 300`、雑音を拾う場合は`--speech-threshold 800`を試す。
 `--memory session`は会話の文脈を引き継ぎ、既定では6返答ごとにリセットする。
 文字の履歴ファイルは作らないが、最新ターンの入出力WAVは保存される。
+会話中に「バイバイ」「またね」「さようなら」「おしまい」のいずれかを単独で話すと、
+Buddyがお別れを返して、その会話セッションを指定ターン数より前に終了する。
 
 3歳半向けの短い返答、1つの質問、二択、聞き取り失敗時の音声再質問を有効にする。
 保護者同席で、最初は有限ターンかつ履歴なしで試す。
@@ -253,6 +255,7 @@ python -m robot.conversation_loop_cli \
 
 `state=waiting trigger=wakeword`の間に「ねえ、バディ」と呼ぶ。検出すると短い起動音が
 鳴り、`state=conversation`へ切り替わる。4ターン後は再び呼びかけ待ちへ戻る。
+会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
 標準の呼びかけは`ねえ バディ`。別の言い方を試す場合は、例えば
 `--wake-phrase バディ`を追加する。`models/wakeword/`は`.gitignore`で除外している。
 

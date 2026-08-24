@@ -246,6 +246,10 @@ python -m robot.conversation_loop_cli \
 `--speech-threshold 300`、周囲の音へ反応する場合は`--speech-threshold 800`のように
 調整する。
 
+会話中に「バイバイ」「またね」「さようなら」「おしまい」を単独で話すと、Buddyは
+「バイバイ。またお話ししようね。」と返し、その会話セッションを終了する。呼びかけ
+開始方式では、その後`state=waiting`へ戻って次の「ねえ、バディ」を待つ。
+
 `--memory session`を付けると、直前までの会話をOpenAI Responses APIの
 `previous_response_id`で次の返答へ引き継ぐ。Buddyの安全指示は毎ターン送信し、
 既定では6回返答すると文脈をリセットする。長さは`--memory-turns 4`のように変更できる。

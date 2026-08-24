@@ -6,7 +6,9 @@ from robot.audio import MockAudioPlayer, MockAudioRecorder, NoSpeechDetectedErro
 from robot.conversation import MockReplyGenerator
 from robot.conversation_loop_cli import (
     CHILD_RETRY_REPLIES,
+    DEFAULT_FAREWELL_REPLY,
     build_parser,
+    is_farewell_transcript,
     run_conversation_loop,
 )
 from robot.speech import MockSpeechSynthesizer
@@ -46,6 +48,12 @@ class NoSpeechRecorder(MockAudioRecorder):
 
 
 class ConversationLoopTest(unittest.TestCase):
+    def test_farewell_detection_ignores_spacing_and_punctuation(self) -> None:
+        self.assertTrue(is_farewell_transcript("バイバイ！"))
+        self.assertTrue(is_farewell_transcript("お話、おしまい。"))
+        self.assertTrue(is_farewell_transcript("じゃあ、バイバイ"))
+        self.assertFalse(is_farewell_transcript("バイバイって言って"))
+
     def test_defaults_are_finite_and_do_not_use_hardware_or_api(self) -> None:
         args = build_parser().parse_args([])
 
@@ -151,6 +159,36 @@ class ConversationLoopTest(unittest.TestCase):
 
             self.assertEqual(completed, 1)
             self.assertEqual(logs[-1], "Stopping conversation loop.")
+
+    def test_farewell_ends_session_and_plays_goodbye_without_reply_api(self) -> None:
+        with TemporaryDirectory() as directory:
+            logs: list[str] = []
+            reply_generator = MockReplyGenerator("呼ばれない")
+            synthesizer = MockSpeechSynthesizer()
+            player = MockAudioPlayer()
+
+            completed = run_conversation_loop(
+                recorder=MockAudioRecorder(),
+                transcriber=MockTranscriber("バイバイ。"),
+                reply_generator=reply_generator,
+                synthesizer=synthesizer,
+                player=player,
+                input_path=Path(directory) / "input.wav",
+                speech_output=Path(directory) / "reply.wav",
+                duration=0.1,
+                sample_rate=16000,
+                language="ja",
+                turns=4,
+                pause=0,
+                output=logs.append,
+                sleeper=lambda _: None,
+            )
+
+            self.assertEqual(completed, 1)
+            self.assertEqual(reply_generator.inputs, [])
+            self.assertEqual(synthesizer.inputs, [DEFAULT_FAREWELL_REPLY])
+            self.assertEqual(len(player.played), 1)
+            self.assertIn("reason=conversation-ended", logs[-3])
 
     def test_negative_turns_are_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "turns"):

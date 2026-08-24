@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import time
 from typing import Callable
+import unicodedata
 
 from robot.audio import (
     AlsaVoiceActivatedRecorder,
@@ -42,6 +43,29 @@ CHILD_RETRY_REPLIES = (
     "ごめんね、よく聞こえなかったよ。もう一度、ゆっくり話してくれる？",
     "うまく聞き取れないみたい。近くの大人と一緒に、もう一度試してね。",
 )
+FAREWELL_PHRASES = frozenset(
+    {
+        "バイバイ",
+        "ばいばい",
+        "じゃあバイバイ",
+        "バイバイまたね",
+        "またね",
+        "さようなら",
+        "さよなら",
+        "おしまい",
+        "お話おしまい",
+    }
+)
+DEFAULT_FAREWELL_REPLY = "バイバイ。またお話ししようね。"
+
+
+def is_farewell_transcript(transcript: str) -> bool:
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKC", transcript).casefold()
+        if character.isalnum()
+    )
+    return normalized in FAREWELL_PHRASES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,6 +198,7 @@ def run_conversation_loop(
     turns: int,
     pause: float,
     retry_replies: tuple[str, ...] = (),
+    farewell_reply: str = DEFAULT_FAREWELL_REPLY,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -236,6 +261,18 @@ def run_conversation_loop(
                 continue
 
             recognition_failures = 0
+            if is_farewell_transcript(transcript):
+                output(
+                    f"turn={turn} reply={farewell_reply} "
+                    "reason=conversation-ended"
+                )
+                generated = synthesizer.synthesize(farewell_reply, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                player.play(generated)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                break
+
             reply = reply_generator.reply(transcript)
             output(f"turn={turn} reply={reply}")
             generated = synthesizer.synthesize(reply, speech_output)
