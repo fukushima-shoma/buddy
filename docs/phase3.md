@@ -168,12 +168,44 @@ python -m robot.transcribe_cli record \
 aplay -D plughw:2,0 captures/audio/transcription-input.wav
 ```
 
+## Step 8: 返答を音声で再生する
+
+まず固定した文章を音声合成し、EMEETから再生する。
+
+```sh
+python -m robot.speech_cli \
+  "こんにちは。ぼくはAIロボットのBuddyだよ。" \
+  --backend openai \
+  --playback-backend alsa \
+  --device plughw:2,0
+```
+
+録音、文字起こし、返答生成、音声合成、再生を1コマンドで行う。
+
+```sh
+python -m robot.transcribe_cli record \
+  --audio-backend alsa \
+  --device plughw:2,0 \
+  --duration 5 \
+  --backend openai \
+  --language ja \
+  --reply-backend openai \
+  --speech-backend openai \
+  --playback-backend alsa \
+  --playback-device plughw:2,0
+```
+
+既定の音声合成モデルは`gpt-4o-mini-tts`、声は`marin`、保存形式はWAV。
+生成音声は`captures/audio/reply.wav`へ保存される。聞いている人には、この声が
+人間ではなくAIによる生成音声であることをあらかじめ伝える。
+
 ## 安全上の注意
 
 - 最初は音量を小さくする。
 - モーター用電池をOFFにして音声単体を確認する。
 - APIキーや認証情報をGitへコミットしない。
 - 音声を保存する場合は、周囲の人へ録音中であることを伝える。
+- 音声合成を使う場合は、AI生成音声であることを周囲の人へ伝える。
 
 ## Phase3 Checklist
 
@@ -184,5 +216,5 @@ aplay -D plughw:2,0 captures/audio/transcription-input.wav
 - [x] マイク録音と再生
 - [x] 音声認識
 - [x] 返答生成
-- [ ] 音声合成
+- [x] 音声合成
 - [ ] 会話ループ

@@ -58,9 +58,13 @@ class TranscriptionTest(unittest.TestCase):
         self.assertEqual(file_args.backend, "mock")
         self.assertEqual(file_args.model, DEFAULT_TRANSCRIPTION_MODEL)
         self.assertEqual(file_args.reply_backend, "none")
+        self.assertEqual(file_args.speech_backend, "none")
+        self.assertEqual(file_args.playback_backend, "none")
         self.assertEqual(record_args.backend, "mock")
         self.assertEqual(record_args.audio_backend, "mock")
         self.assertEqual(record_args.reply_backend, "none")
+        self.assertEqual(record_args.speech_backend, "none")
+        self.assertEqual(record_args.playback_backend, "none")
 
     def test_transcriber_factory_defaults_to_mock(self) -> None:
         transcriber = create_transcriber(

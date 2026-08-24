@@ -4,8 +4,11 @@ import argparse
 from pathlib import Path
 
 from robot.audio import AlsaAudioRecorder, MockAudioRecorder
+from robot.audio_cli import create_player
 from robot.conversation import DEFAULT_REPLY_MODEL
 from robot.reply_cli import create_reply_generator
+from robot.speech import DEFAULT_SPEECH_MODEL, DEFAULT_SPEECH_VOICE
+from robot.speech_cli import create_synthesizer
 from robot.transcription import (
     DEFAULT_TRANSCRIPTION_MODEL,
     MockTranscriber,
@@ -32,6 +35,25 @@ def add_transcription_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--reply-model", default=DEFAULT_REPLY_MODEL)
     parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
+    parser.add_argument(
+        "--speech-backend",
+        choices=("none", "mock", "openai"),
+        default="none",
+        help="Optionally synthesize the generated reply as a WAV file.",
+    )
+    parser.add_argument("--speech-model", default=DEFAULT_SPEECH_MODEL)
+    parser.add_argument("--speech-voice", default=DEFAULT_SPEECH_VOICE)
+    parser.add_argument(
+        "--speech-output",
+        type=Path,
+        default=Path("captures/audio/reply.wav"),
+    )
+    parser.add_argument(
+        "--playback-backend",
+        choices=("none", "mock", "alsa"),
+        default="none",
+    )
+    parser.add_argument("--playback-device", default="default")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -106,7 +128,26 @@ def main() -> int:
             model=args.reply_model,
             mock_reply=args.mock_reply,
         )
-        print(f"reply={generator.reply(transcript)}")
+        reply = generator.reply(transcript)
+        print(f"reply={reply}")
+        if args.speech_backend != "none":
+            synthesizer = create_synthesizer(
+                args.speech_backend,
+                model=args.speech_model,
+                voice=args.speech_voice,
+            )
+            speech_output = synthesizer.synthesize(reply, args.speech_output)
+            print(
+                f"synthesized={speech_output} backend={args.speech_backend} "
+                f"voice={args.speech_voice}"
+            )
+            if args.playback_backend != "none":
+                create_player(args.playback_backend, args.playback_device).play(
+                    speech_output
+                )
+                print(
+                    f"played={speech_output} backend={args.playback_backend}"
+                )
     return 0
 
 

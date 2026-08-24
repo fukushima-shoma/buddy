@@ -84,6 +84,34 @@ python -m robot.transcribe_cli record \
 aplay -D plughw:2,0 captures/audio/transcription-input.wav
 ```
 
+OpenAI APIで文章を音声合成し、EMEETから再生する。
+
+```sh
+python -m robot.speech_cli \
+  "こんにちは。ぼくはAIロボットのBuddyだよ。" \
+  --backend openai \
+  --playback-backend alsa \
+  --device plughw:2,0
+```
+
+録音から返答の音声再生までを続けて行う。
+
+```sh
+python -m robot.transcribe_cli record \
+  --audio-backend alsa \
+  --device plughw:2,0 \
+  --duration 5 \
+  --backend openai \
+  --language ja \
+  --reply-backend openai \
+  --speech-backend openai \
+  --playback-backend alsa \
+  --playback-device plughw:2,0
+```
+
+生成音声は`captures/audio/reply.wav`へ保存される。利用時はAI生成音声であることを
+周囲の人へ伝える。
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。
