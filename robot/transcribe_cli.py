@@ -41,6 +41,11 @@ def add_transcription_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reply-model", default=DEFAULT_REPLY_MODEL)
     parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
     parser.add_argument(
+        "--child-mode",
+        action="store_true",
+        help="Use supervised replies suitable for a young child.",
+    )
+    parser.add_argument(
         "--speech-backend",
         choices=("none", "mock", "openai"),
         default="none",
@@ -135,6 +140,7 @@ def main() -> int:
             args.reply_backend,
             model=args.reply_model,
             mock_reply=args.mock_reply,
+            child_mode=args.child_mode,
         )
         reply = generator.reply(transcript)
         print(f"reply={reply}")

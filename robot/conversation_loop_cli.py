@@ -26,6 +26,12 @@ from robot.transcribe_cli import create_transcriber
 from robot.transcription import DEFAULT_TRANSCRIPTION_MODEL, Transcriber
 
 
+CHILD_RETRY_REPLIES = (
+    "ごめんね、よく聞こえなかったよ。もう一度、ゆっくり話してくれる？",
+    "うまく聞き取れないみたい。近くの大人と一緒に、もう一度試してね。",
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Repeat Buddy's record, reply, and playback cycle."
@@ -56,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--reply-model", default=DEFAULT_REPLY_MODEL)
     parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
+    parser.add_argument(
+        "--child-mode",
+        action="store_true",
+        help="Use supervised, age-appropriate replies and recognition retries.",
+    )
     parser.add_argument(
         "--memory",
         choices=("none", "session"),
@@ -114,6 +125,7 @@ def run_conversation_loop(
     language: str,
     turns: int,
     pause: float,
+    retry_replies: tuple[str, ...] = (),
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
@@ -121,6 +133,7 @@ def run_conversation_loop(
         raise ValueError("turns must be 0 or greater")
 
     completed_turns = 0
+    recognition_failures = 0
     try:
         while turns == 0 or completed_turns < turns:
             if completed_turns > 0 and pause > 0:
@@ -135,6 +148,16 @@ def run_conversation_loop(
                 )
             except NoSpeechDetectedError:
                 output(f"turn={turn} transcript=not-found reason=no-speech")
+                if retry_replies:
+                    retry = retry_replies[
+                        min(recognition_failures, len(retry_replies) - 1)
+                    ]
+                    output(f"turn={turn} reply={retry} reason=no-speech")
+                    generated = synthesizer.synthesize(retry, speech_output)
+                    output(f"turn={turn} synthesized={generated}")
+                    player.play(generated)
+                    output(f"turn={turn} played={generated}")
+                    recognition_failures += 1
                 completed_turns += 1
                 continue
             output(f"turn={turn} recorded={source}")
@@ -142,10 +165,22 @@ def run_conversation_loop(
             transcript = transcriber.transcribe(source, language=language)
             output(f"turn={turn} transcript={transcript or 'not-found'}")
             if not transcript:
-                output(f"turn={turn} reply=skipped reason=empty-transcript")
+                if retry_replies:
+                    retry = retry_replies[
+                        min(recognition_failures, len(retry_replies) - 1)
+                    ]
+                    output(f"turn={turn} reply={retry} reason=empty-transcript")
+                    generated = synthesizer.synthesize(retry, speech_output)
+                    output(f"turn={turn} synthesized={generated}")
+                    player.play(generated)
+                    output(f"turn={turn} played={generated}")
+                    recognition_failures += 1
+                else:
+                    output(f"turn={turn} reply=skipped reason=empty-transcript")
                 completed_turns += 1
                 continue
 
+            recognition_failures = 0
             reply = reply_generator.reply(transcript)
             output(f"turn={turn} reply={reply}")
             generated = synthesizer.synthesize(reply, speech_output)
@@ -181,6 +216,7 @@ def main() -> int:
         mock_reply=args.mock_reply,
         remember_context=args.memory == "session",
         max_context_turns=args.memory_turns,
+        child_mode=args.child_mode,
     )
     synthesizer = create_synthesizer(
         args.speech_backend,
@@ -193,9 +229,15 @@ def main() -> int:
     print(
         f"conversation-loop turns={turns} audio={args.audio_backend} "
         f"transcription={args.transcription_backend} reply={args.reply_backend} "
+        f"child-mode={'on' if args.child_mode else 'off'} "
         f"memory={args.memory} speech={args.speech_backend} "
         f"speech-style={args.speech_style} playback={args.playback_backend}"
     )
+    if args.child_mode:
+        print(
+            "child-mode=supervised-test-only "
+            "personal-data=do-not-share-without-required-data-controls"
+        )
     run_conversation_loop(
         recorder=recorder,
         transcriber=transcriber,
@@ -209,6 +251,7 @@ def main() -> int:
         language=args.language,
         turns=args.turns,
         pause=args.pause,
+        retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
     )
     return 0
 

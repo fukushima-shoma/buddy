@@ -252,6 +252,40 @@ python -m robot.conversation_loop_cli \
 このプログラムは文字起こしや返答の履歴ファイルを作らないが、入力音声と返答音声の
 WAVには各ターンの最新内容が残る。
 
+### 3歳半向け会話モード（保護者同席の試験用）
+
+`--child-mode`を付けると、返答を原則1文、最大でも短い2文にする。質問は一度に
+1つまでとし、できるだけ分かりやすい二択にする。個人情報を尋ねず、秘密や依存を
+促す表現を避け、安全に関わる話は近くの信頼できる大人へつなぐ。
+
+聞き取りに失敗した場合、1回目はゆっくり話し直すよう音声で促す。2回続けて失敗
+した場合は内容を推測せず、近くの大人と一緒に確認するよう案内する。認識に成功
+すると失敗回数はリセットされる。
+
+最初は保護者が同席し、4ターンだけ試す。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory none \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 4
+```
+
+このモードは、子どもが単独で利用できる完成版ではない。OpenAIのUnder 18 API
+Guidanceでは、13歳未満または地域のデジタル同意年齢未満の子どもの個人データを
+処理する前に、APIのZero Data Retentionを実装するよう求めている。実際の子どもの
+音声をAPIへ送る運用は、必要なデータ管理を確認するまで行わない。
+
+[OpenAI Under 18 API Guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance)
+
 ## 安全上の注意
 
 - 最初は音量を小さくする。

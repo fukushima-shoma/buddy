@@ -140,6 +140,28 @@ python -m robot.conversation_loop_cli \
 `--memory session`は会話の文脈を引き継ぎ、既定では6返答ごとにリセットする。
 文字の履歴ファイルは作らないが、最新ターンの入出力WAVは保存される。
 
+3歳半向けの短い返答、1つの質問、二択、聞き取り失敗時の音声再質問を有効にする。
+保護者同席で、最初は有限ターンかつ履歴なしで試す。
+
+```sh
+python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:2,0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory none \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa \
+  --playback-device plughw:2,0 \
+  --turns 4
+```
+
+これは保護者同席の開発試験用。実際の13歳未満の子どもの音声をOpenAI APIへ送る
+前に、Under 18 API Guidanceに従い、Zero Data Retentionを含む必要なデータ管理を
+確認する。
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。

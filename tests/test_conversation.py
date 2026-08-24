@@ -3,9 +3,11 @@ import unittest
 
 from robot.conversation import (
     BUDDY_INSTRUCTIONS,
+    CHILD_REPLY_INSTRUCTIONS,
     DEFAULT_REPLY_MODEL,
     MockReplyGenerator,
     OpenAIReplyGenerator,
+    get_reply_instructions,
 )
 from robot.reply_cli import build_parser, create_reply_generator
 
@@ -59,6 +61,16 @@ class ConversationTest(unittest.TestCase):
         self.assertIn("個人情報", BUDDY_INSTRUCTIONS)
         self.assertIn("信頼できる大人", BUDDY_INSTRUCTIONS)
 
+    def test_child_prompt_uses_short_simple_safe_conversation_rules(self) -> None:
+        instructions = get_reply_instructions(True)
+
+        self.assertEqual(instructions, CHILD_REPLY_INSTRUCTIONS)
+        self.assertIn("質問は1つ", instructions)
+        self.assertIn("二択", instructions)
+        self.assertIn("個人情報", instructions)
+        self.assertIn("秘密", instructions)
+        self.assertIn("信頼できる大人", instructions)
+
     def test_session_context_passes_previous_response_id(self) -> None:
         responses = FakeResponses()
         client = SimpleNamespace(responses=responses)
@@ -95,6 +107,12 @@ class ConversationTest(unittest.TestCase):
 
         self.assertEqual(args.backend, "mock")
         self.assertEqual(args.model, DEFAULT_REPLY_MODEL)
+        self.assertFalse(args.child_mode)
+
+    def test_cli_can_enable_child_mode(self) -> None:
+        args = build_parser().parse_args(["こんにちは", "--child-mode"])
+
+        self.assertTrue(args.child_mode)
 
     def test_factory_defaults_to_mock(self) -> None:
         generator = create_reply_generator(

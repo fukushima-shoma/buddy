@@ -7,6 +7,7 @@ from robot.conversation import (
     MockReplyGenerator,
     OpenAIReplyGenerator,
     ReplyGenerator,
+    get_reply_instructions,
 )
 
 
@@ -16,6 +17,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend", choices=("mock", "openai"), default="mock")
     parser.add_argument("--model", default=DEFAULT_REPLY_MODEL)
     parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
+    parser.add_argument(
+        "--child-mode",
+        action="store_true",
+        help="Use short, supervised, age-appropriate replies for a young child.",
+    )
     return parser
 
 
@@ -26,11 +32,13 @@ def create_reply_generator(
     mock_reply: str,
     remember_context: bool = False,
     max_context_turns: int = 6,
+    child_mode: bool = False,
 ) -> ReplyGenerator:
     if backend == "mock":
         return MockReplyGenerator(mock_reply)
     return OpenAIReplyGenerator(
         model=model,
+        instructions=get_reply_instructions(child_mode),
         remember_context=remember_context,
         max_context_turns=max_context_turns,
     )
@@ -42,6 +50,7 @@ def main() -> int:
         args.backend,
         model=args.model,
         mock_reply=args.mock_reply,
+        child_mode=args.child_mode,
     )
     print(f"reply={generator.reply(args.text)}")
     return 0
