@@ -67,6 +67,7 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(instructions, CHILD_REPLY_INSTRUCTIONS)
         self.assertIn("質問は1つ", instructions)
         self.assertIn("二択", instructions)
+        self.assertIn("言った？", instructions)
         self.assertIn("個人情報", instructions)
         self.assertIn("秘密", instructions)
         self.assertIn("信頼できる大人", instructions)

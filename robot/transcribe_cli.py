@@ -15,6 +15,7 @@ from robot.speech import (
 )
 from robot.speech_cli import create_synthesizer
 from robot.transcription import (
+    CHILD_TRANSCRIPTION_PROMPT,
     DEFAULT_TRANSCRIPTION_MODEL,
     MockTranscriber,
     OpenAITranscriber,
@@ -31,6 +32,10 @@ def add_transcription_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--model", default=DEFAULT_TRANSCRIPTION_MODEL)
     parser.add_argument("--language", default="ja")
+    parser.add_argument(
+        "--transcription-prompt",
+        help="Optional context hint passed to the transcription model.",
+    )
     parser.add_argument("--mock-text", default="こんにちは、Buddy")
     parser.add_argument(
         "--reply-backend",
@@ -100,10 +105,11 @@ def create_transcriber(
     *,
     model: str,
     mock_text: str,
+    prompt: str | None = None,
 ) -> Transcriber:
     if backend == "mock":
         return MockTranscriber(mock_text)
-    return OpenAITranscriber(model=model)
+    return OpenAITranscriber(model=model, prompt=prompt)
 
 
 def main() -> int:
@@ -129,6 +135,10 @@ def main() -> int:
         args.backend,
         model=args.model,
         mock_text=args.mock_text,
+        prompt=(
+            args.transcription_prompt
+            or (CHILD_TRANSCRIPTION_PROMPT if args.child_mode else None)
+        ),
     )
     transcript = transcriber.transcribe(source, language=args.language)
     print(f"transcript={transcript or 'not-found'}")

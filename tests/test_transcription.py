@@ -9,9 +9,11 @@ from unittest.mock import patch
 from robot.audio import generate_tone
 from robot.transcribe_cli import build_parser, create_transcriber, main
 from robot.transcription import (
+    CHILD_TRANSCRIPTION_PROMPT,
     DEFAULT_TRANSCRIPTION_MODEL,
     MockTranscriber,
     OpenAITranscriber,
+    is_unreliable_child_transcript,
 )
 
 
@@ -51,12 +53,39 @@ class TranscriptionTest(unittest.TestCase):
             self.assertEqual(Path(uploaded.name), source)
             self.assertTrue(uploaded.closed)
 
+    def test_openai_transcriber_sends_optional_child_context_prompt(self) -> None:
+        with TemporaryDirectory() as directory:
+            source = generate_tone(Path(directory) / "speech.wav", duration=0.1)
+            transcriptions = FakeTranscriptions()
+            client = SimpleNamespace(
+                audio=SimpleNamespace(transcriptions=transcriptions)
+            )
+            transcriber = OpenAITranscriber(
+                prompt=CHILD_TRANSCRIPTION_PROMPT,
+                client=client,
+            )
+
+            transcriber.transcribe(source, language="ja")
+
+            self.assertEqual(
+                transcriptions.calls[0]["prompt"], CHILD_TRANSCRIPTION_PROMPT
+            )
+
+    def test_child_transcript_filter_rejects_common_hallucinations(self) -> None:
+        self.assertTrue(
+            is_unreliable_child_transcript("ご視聴ありがとうございました。")
+        )
+        self.assertTrue(is_unreliable_child_transcript("……"))
+        self.assertFalse(is_unreliable_child_transcript("あか"))
+        self.assertFalse(is_unreliable_child_transcript("でんしゃがすき"))
+
     def test_cli_defaults_do_not_call_openai_or_audio_hardware(self) -> None:
         file_args = build_parser().parse_args(["file", "speech.wav"])
         record_args = build_parser().parse_args(["record"])
 
         self.assertEqual(file_args.backend, "mock")
         self.assertEqual(file_args.model, DEFAULT_TRANSCRIPTION_MODEL)
+        self.assertIsNone(file_args.transcription_prompt)
         self.assertEqual(file_args.reply_backend, "none")
         self.assertFalse(file_args.child_mode)
         self.assertEqual(file_args.speech_backend, "none")

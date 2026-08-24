@@ -23,7 +23,12 @@ from robot.speech import (
 )
 from robot.speech_cli import create_synthesizer
 from robot.transcribe_cli import create_transcriber
-from robot.transcription import DEFAULT_TRANSCRIPTION_MODEL, Transcriber
+from robot.transcription import (
+    CHILD_TRANSCRIPTION_PROMPT,
+    DEFAULT_TRANSCRIPTION_MODEL,
+    Transcriber,
+    is_unreliable_child_transcript,
+)
 
 
 CHILD_RETRY_REPLIES = (
@@ -56,6 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--transcription-model", default=DEFAULT_TRANSCRIPTION_MODEL)
     parser.add_argument("--language", default="ja")
+    parser.add_argument(
+        "--transcription-prompt",
+        help="Optional context hint passed to the transcription model.",
+    )
     parser.add_argument("--mock-text", default="こんにちは、Buddy")
     parser.add_argument(
         "--reply-backend", choices=("mock", "openai"), default="mock"
@@ -126,6 +135,7 @@ def run_conversation_loop(
     turns: int,
     pause: float,
     retry_replies: tuple[str, ...] = (),
+    reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
@@ -164,19 +174,24 @@ def run_conversation_loop(
 
             transcript = transcriber.transcribe(source, language=language)
             output(f"turn={turn} transcript={transcript or 'not-found'}")
+            failure_reason: str | None = None
             if not transcript:
+                failure_reason = "empty-transcript"
+            elif reject_transcript is not None and reject_transcript(transcript):
+                failure_reason = "uncertain-transcript"
+            if failure_reason is not None:
                 if retry_replies:
                     retry = retry_replies[
                         min(recognition_failures, len(retry_replies) - 1)
                     ]
-                    output(f"turn={turn} reply={retry} reason=empty-transcript")
+                    output(f"turn={turn} reply={retry} reason={failure_reason}")
                     generated = synthesizer.synthesize(retry, speech_output)
                     output(f"turn={turn} synthesized={generated}")
                     player.play(generated)
                     output(f"turn={turn} played={generated}")
                     recognition_failures += 1
                 else:
-                    output(f"turn={turn} reply=skipped reason=empty-transcript")
+                    output(f"turn={turn} reply=skipped reason={failure_reason}")
                 completed_turns += 1
                 continue
 
@@ -209,6 +224,10 @@ def main() -> int:
         args.transcription_backend,
         model=args.transcription_model,
         mock_text=args.mock_text,
+        prompt=(
+            args.transcription_prompt
+            or (CHILD_TRANSCRIPTION_PROMPT if args.child_mode else None)
+        ),
     )
     reply_generator = create_reply_generator(
         args.reply_backend,
@@ -252,6 +271,9 @@ def main() -> int:
         turns=args.turns,
         pause=args.pause,
         retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
+        reject_transcript=(
+            is_unreliable_child_transcript if args.child_mode else None
+        ),
     )
     return 0
 

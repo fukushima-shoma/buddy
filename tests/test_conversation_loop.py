@@ -10,7 +10,7 @@ from robot.conversation_loop_cli import (
     run_conversation_loop,
 )
 from robot.speech import MockSpeechSynthesizer
-from robot.transcription import MockTranscriber
+from robot.transcription import MockTranscriber, is_unreliable_child_transcript
 
 
 class InterruptingRecorder(MockAudioRecorder):
@@ -259,6 +259,36 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(
                 synthesizer.inputs,
                 [CHILD_RETRY_REPLIES[0], "やあ", CHILD_RETRY_REPLIES[0]],
+            )
+
+    def test_child_mode_retries_instead_of_using_unreliable_transcript(self) -> None:
+        with TemporaryDirectory() as directory:
+            logs: list[str] = []
+            reply_generator = MockReplyGenerator("呼ばれない")
+            synthesizer = MockSpeechSynthesizer()
+
+            run_conversation_loop(
+                recorder=MockAudioRecorder(),
+                transcriber=MockTranscriber("ご視聴ありがとうございました。"),
+                reply_generator=reply_generator,
+                synthesizer=synthesizer,
+                player=MockAudioPlayer(),
+                input_path=Path(directory) / "input.wav",
+                speech_output=Path(directory) / "reply.wav",
+                duration=1,
+                sample_rate=16000,
+                language="ja",
+                turns=1,
+                pause=0,
+                retry_replies=CHILD_RETRY_REPLIES,
+                reject_transcript=is_unreliable_child_transcript,
+                output=logs.append,
+            )
+
+            self.assertEqual(reply_generator.inputs, [])
+            self.assertEqual(synthesizer.inputs, [CHILD_RETRY_REPLIES[0]])
+            self.assertTrue(
+                any("reason=uncertain-transcript" in log for log in logs)
             )
 
 
