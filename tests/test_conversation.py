@@ -1,0 +1,64 @@
+from types import SimpleNamespace
+import unittest
+
+from robot.conversation import (
+    BUDDY_INSTRUCTIONS,
+    DEFAULT_REPLY_MODEL,
+    MockReplyGenerator,
+    OpenAIReplyGenerator,
+)
+from robot.reply_cli import build_parser, create_reply_generator
+
+
+class FakeResponses:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> SimpleNamespace:
+        self.calls.append(kwargs)
+        return SimpleNamespace(output_text="  こんにちは！  ")
+
+
+class ConversationTest(unittest.TestCase):
+    def test_mock_reply_generator_is_deterministic(self) -> None:
+        generator = MockReplyGenerator("モック返答")
+
+        result = generator.reply("こんにちは")
+
+        self.assertEqual(result, "モック返答")
+        self.assertEqual(generator.inputs, ["こんにちは"])
+
+    def test_openai_reply_uses_responses_api_with_app_instructions(self) -> None:
+        responses = FakeResponses()
+        client = SimpleNamespace(responses=responses)
+        generator = OpenAIReplyGenerator(client=client)
+
+        result = generator.reply("こんにちは")
+
+        self.assertEqual(result, "こんにちは！")
+        self.assertEqual(responses.calls[0]["model"], DEFAULT_REPLY_MODEL)
+        self.assertEqual(responses.calls[0]["reasoning"], {"effort": "low"})
+        self.assertEqual(responses.calls[0]["instructions"], BUDDY_INSTRUCTIONS)
+        self.assertEqual(responses.calls[0]["input"], "こんにちは")
+
+    def test_prompt_contains_child_safety_boundaries(self) -> None:
+        self.assertIn("AI", BUDDY_INSTRUCTIONS)
+        self.assertIn("個人情報", BUDDY_INSTRUCTIONS)
+        self.assertIn("信頼できる大人", BUDDY_INSTRUCTIONS)
+
+    def test_cli_defaults_do_not_call_openai(self) -> None:
+        args = build_parser().parse_args(["こんにちは"])
+
+        self.assertEqual(args.backend, "mock")
+        self.assertEqual(args.model, DEFAULT_REPLY_MODEL)
+
+    def test_factory_defaults_to_mock(self) -> None:
+        generator = create_reply_generator(
+            "mock", model=DEFAULT_REPLY_MODEL, mock_reply="安全"
+        )
+
+        self.assertIsInstance(generator, MockReplyGenerator)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -133,6 +133,33 @@ python -m robot.transcribe_cli record \
 既定の文字起こしモデルは`gpt-4o-mini-transcribe`。APIキーをGitへ保存せず、
 認識対象の音声だけをOpenAI APIへ送信する。
 
+## Step 7: 認識した文章へ返答する
+
+まず文字入力だけで返答生成を確認する。`--backend openai`を明示した場合だけ
+Responses APIを呼び出す。
+
+```sh
+python -m robot.reply_cli \
+  "こんにちは。あなたの名前は？" \
+  --backend openai
+```
+
+録音、文字起こし、返答生成を1コマンドで行う。
+
+```sh
+python -m robot.transcribe_cli record \
+  --audio-backend alsa \
+  --device plughw:2,0 \
+  --duration 5 \
+  --backend openai \
+  --language ja \
+  --reply-backend openai
+```
+
+既定の返答モデルは`gpt-5.6`で、Responses APIへ一往復だけ送信する。返答は子ども向け
+の短い日本語に制限し、個人情報を尋ねず、危険な相談は信頼できる大人へ誘導する。
+この段階では会話履歴を保存しない。
+
 ## 安全上の注意
 
 - 最初は音量を小さくする。
@@ -147,7 +174,7 @@ python -m robot.transcribe_cli record \
 - [x] USBスピーカーフォンをOSが認識
 - [x] テスト音を実機再生
 - [x] マイク録音と再生
-- [ ] 音声認識
-- [ ] 返答生成
+- [x] 音声認識
+- [x] 返答生成
 - [ ] 音声合成
 - [ ] 会話ループ

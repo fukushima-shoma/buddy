@@ -60,6 +60,24 @@ python -m robot.transcribe_cli record \
   --language ja
 ```
 
+文字入力からBuddyの返答を生成する。
+
+```sh
+python -m robot.reply_cli "こんにちは。あなたの名前は？" --backend openai
+```
+
+録音、文字起こし、返答生成を続けて行う。
+
+```sh
+python -m robot.transcribe_cli record \
+  --audio-backend alsa \
+  --device plughw:2,0 \
+  --duration 5 \
+  --backend openai \
+  --language ja \
+  --reply-backend openai
+```
+
 ## モーター単体テスト
 
 実機を動かす前に、車輪を床から浮かせる。

@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 
 from robot.audio import AlsaAudioRecorder, MockAudioRecorder
+from robot.conversation import DEFAULT_REPLY_MODEL
+from robot.reply_cli import create_reply_generator
 from robot.transcription import (
     DEFAULT_TRANSCRIPTION_MODEL,
     MockTranscriber,
@@ -22,6 +24,14 @@ def add_transcription_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default=DEFAULT_TRANSCRIPTION_MODEL)
     parser.add_argument("--language", default="ja")
     parser.add_argument("--mock-text", default="こんにちは、Buddy")
+    parser.add_argument(
+        "--reply-backend",
+        choices=("none", "mock", "openai"),
+        default="none",
+        help="Optionally generate one reply after transcription.",
+    )
+    parser.add_argument("--reply-model", default=DEFAULT_REPLY_MODEL)
+    parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -87,6 +97,13 @@ def main() -> int:
     )
     transcript = transcriber.transcribe(source, language=args.language)
     print(f"transcript={transcript}")
+    if args.reply_backend != "none":
+        generator = create_reply_generator(
+            args.reply_backend,
+            model=args.reply_model,
+            mock_reply=args.mock_reply,
+        )
+        print(f"reply={generator.reply(transcript)}")
     return 0
 
 
