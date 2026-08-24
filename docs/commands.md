@@ -251,6 +251,7 @@ python -m robot.conversation_loop_cli \
   --playback-backend alsa \
   --playback-device plughw:2,0 \
   --turns 0 \
+  --max-silence-turns 2 \
   --start-trigger wakeword \
   --wake-word-model models/wakeword/vosk-model-small-ja-0.22
 ```
@@ -258,6 +259,8 @@ python -m robot.conversation_loop_cli \
 `state=waiting trigger=wakeword`の間に「ねえ、バディ」と呼ぶ。検出すると短い起動音が
 鳴り、`state=conversation`へ切り替わる。会話は最大30返答分の文脈を引き継ぐ。
 会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
+10秒間の無音が2回続いた場合も、「お話はおしまいかな。またお話ししようね。」と
+話して待機へ戻る。無効化する場合は`--max-silence-turns 0`を指定する。
 標準の呼びかけは`ねえ バディ`。別の言い方を試す場合は、例えば
 `--wake-phrase バディ`を追加する。`models/wakeword/`は`.gitignore`で除外している。
 

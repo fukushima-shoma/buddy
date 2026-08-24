@@ -61,6 +61,8 @@ FAREWELL_PHRASES = frozenset(
     }
 )
 DEFAULT_FAREWELL_REPLY = "バイバイ。またお話ししようね。"
+DEFAULT_MAX_SILENCE_TURNS = 2
+DEFAULT_INACTIVITY_REPLY = "お話はおしまいかな。またお話ししようね。"
 
 
 def is_farewell_transcript(transcript: str) -> bool:
@@ -153,6 +155,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds to wait after playback before the next recording.",
     )
     parser.add_argument(
+        "--max-silence-turns",
+        type=int,
+        default=DEFAULT_MAX_SILENCE_TURNS,
+        help="End a session after this many silent turns; use 0 to disable.",
+    )
+    parser.add_argument(
         "--start-trigger",
         choices=("immediate", "keyboard", "gpio", "wakeword"),
         default="immediate",
@@ -203,6 +211,8 @@ def run_conversation_loop(
     pause: float,
     retry_replies: tuple[str, ...] = (),
     farewell_reply: str = DEFAULT_FAREWELL_REPLY,
+    max_silence_turns: int = DEFAULT_MAX_SILENCE_TURNS,
+    inactivity_reply: str = DEFAULT_INACTIVITY_REPLY,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -210,9 +220,12 @@ def run_conversation_loop(
 ) -> int:
     if turns < 0:
         raise ValueError("turns must be 0 or greater")
+    if max_silence_turns < 0:
+        raise ValueError("max silence turns must be 0 or greater")
 
     completed_turns = 0
     recognition_failures = 0
+    consecutive_silences = 0
     try:
         while turns == 0 or completed_turns < turns:
             if completed_turns > 0 and pause > 0:
@@ -227,6 +240,24 @@ def run_conversation_loop(
                 )
             except NoSpeechDetectedError:
                 output(f"turn={turn} transcript=not-found reason=no-speech")
+                consecutive_silences += 1
+                if (
+                    max_silence_turns > 0
+                    and consecutive_silences >= max_silence_turns
+                ):
+                    output(
+                        f"turn={turn} reply={inactivity_reply} "
+                        "reason=conversation-ended-inactivity"
+                    )
+                    generated = synthesizer.synthesize(
+                        inactivity_reply,
+                        speech_output,
+                    )
+                    output(f"turn={turn} synthesized={generated}")
+                    player.play(generated)
+                    output(f"turn={turn} played={generated}")
+                    completed_turns += 1
+                    break
                 if retry_replies:
                     retry = retry_replies[
                         min(recognition_failures, len(retry_replies) - 1)
@@ -240,6 +271,7 @@ def run_conversation_loop(
                 completed_turns += 1
                 continue
             output(f"turn={turn} recorded={source}")
+            consecutive_silences = 0
 
             transcript = transcriber.transcribe(source, language=language)
             output(f"turn={turn} transcript={transcript or 'not-found'}")
@@ -356,6 +388,7 @@ def main() -> int:
             turns=args.turns,
             pause=args.pause,
             retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
+            max_silence_turns=args.max_silence_turns,
             reject_transcript=(
                 is_unreliable_child_transcript if args.child_mode else None
             ),

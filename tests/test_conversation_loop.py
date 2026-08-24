@@ -7,6 +7,7 @@ from robot.conversation import MockReplyGenerator
 from robot.conversation_loop_cli import (
     CHILD_RETRY_REPLIES,
     DEFAULT_FAREWELL_REPLY,
+    DEFAULT_INACTIVITY_REPLY,
     build_parser,
     is_farewell_transcript,
     run_conversation_loop,
@@ -58,6 +59,7 @@ class ConversationLoopTest(unittest.TestCase):
         args = build_parser().parse_args([])
 
         self.assertEqual(args.turns, 1)
+        self.assertEqual(args.max_silence_turns, 2)
         self.assertEqual(args.audio_backend, "mock")
         self.assertEqual(args.transcription_backend, "mock")
         self.assertEqual(args.reply_backend, "mock")
@@ -207,6 +209,24 @@ class ConversationLoopTest(unittest.TestCase):
                 pause=0,
             )
 
+    def test_negative_silence_limit_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "max silence turns"):
+            run_conversation_loop(
+                recorder=MockAudioRecorder(),
+                transcriber=MockTranscriber(),
+                reply_generator=MockReplyGenerator(),
+                synthesizer=MockSpeechSynthesizer(),
+                player=MockAudioPlayer(),
+                input_path=Path("input.wav"),
+                speech_output=Path("reply.wav"),
+                duration=0.1,
+                sample_rate=16000,
+                language="ja",
+                turns=1,
+                pause=0,
+                max_silence_turns=-1,
+            )
+
     def test_vad_timeout_skips_all_openai_style_processing(self) -> None:
         logs: list[str] = []
         reply_generator = MockReplyGenerator()
@@ -237,7 +257,7 @@ class ConversationLoopTest(unittest.TestCase):
             ],
         )
 
-    def test_child_mode_speaks_retry_and_escalates_after_second_failure(self) -> None:
+    def test_two_silent_turns_end_session_and_return_to_waiting(self) -> None:
         with TemporaryDirectory() as directory:
             logs: list[str] = []
             synthesizer = MockSpeechSynthesizer()
@@ -261,9 +281,37 @@ class ConversationLoopTest(unittest.TestCase):
             )
 
             self.assertEqual(completed, 2)
-            self.assertEqual(synthesizer.inputs, list(CHILD_RETRY_REPLIES))
+            self.assertEqual(
+                synthesizer.inputs,
+                [CHILD_RETRY_REPLIES[0], DEFAULT_INACTIVITY_REPLY],
+            )
             self.assertEqual(len(player.played), 2)
-            self.assertIn("近くの大人", synthesizer.inputs[1])
+            self.assertTrue(
+                any("reason=conversation-ended-inactivity" in log for log in logs)
+            )
+
+    def test_silence_auto_end_can_be_disabled(self) -> None:
+        synthesizer = MockSpeechSynthesizer()
+
+        completed = run_conversation_loop(
+            recorder=NoSpeechRecorder(),
+            transcriber=MockTranscriber("should-not-run"),
+            reply_generator=MockReplyGenerator(),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=1,
+            sample_rate=16000,
+            language="ja",
+            turns=2,
+            pause=0,
+            max_silence_turns=0,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(completed, 2)
+        self.assertEqual(synthesizer.inputs, [])
 
     def test_successful_transcript_resets_child_retry_counter(self) -> None:
         class OneMissRecorder(MockAudioRecorder):
