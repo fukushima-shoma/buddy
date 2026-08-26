@@ -33,4 +33,5 @@ class SystemdServiceTest(unittest.TestCase):
         self.assertIn("person_detection_mediapipe_2023mar.onnx", installer)
         self.assertIn("OPENAI_API_KEY is missing or empty", installer)
         self.assertIn('chmod 600 "$buddy_dir/.env"', installer)
-        self.assertIn("systemctl enable --now", installer)
+        self.assertIn('systemctl enable "$service_name"', installer)
+        self.assertIn('systemctl restart "$service_name"', installer)

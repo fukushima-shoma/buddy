@@ -33,5 +33,6 @@ sudo install -m 0644 \
   "$buddy_dir/infra/$service_name" \
   "/etc/systemd/system/$service_name"
 sudo systemctl daemon-reload
-sudo systemctl enable --now "$service_name"
+sudo systemctl enable "$service_name"
+sudo systemctl restart "$service_name"
 sudo systemctl --no-pager --full status "$service_name"
