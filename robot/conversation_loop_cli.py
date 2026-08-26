@@ -73,9 +73,11 @@ DEFAULT_MAX_SILENCE_TURNS = 2
 DEFAULT_INACTIVITY_REPLY = "お話はおしまいかな。またお話ししようね。"
 MOBILITY_START_PHRASES = frozenset({"ついてきて", "ついて来て"})
 MOBILITY_STOP_PHRASES = frozenset({"止まって", "とまって", "ストップ"})
-MOBILITY_START_REPLY = "うん、ついていくね。危ないときは、止まってって言ってね。"
+MOBILITY_START_REPLY = "いまから、ついていくね。動き始めるよ。"
 MOBILITY_ALREADY_RUNNING_REPLY = "もう、ついていっているよ。"
-MOBILITY_STOP_REPLY = "止まったよ。"
+MOBILITY_STOP_REPLY = "止まったよ。もう動かないよ。"
+MOBILITY_ALREADY_STOPPED_REPLY = "いまは止まっているよ。"
+MOBILITY_FAREWELL_REPLY = "止まったよ。バイバイ。またお話ししようね。"
 MOBILITY_UNAVAILABLE_REPLY = "ごめんね、今は動けないよ。"
 
 
@@ -393,13 +395,17 @@ def run_conversation_loop(
 
             recognition_failures = 0
             if is_farewell_transcript(transcript):
+                was_moving = (
+                    mobility_active is not None and mobility_active()
+                )
                 if stop_mobility is not None:
                     stop_mobility()
+                goodbye = MOBILITY_FAREWELL_REPLY if was_moving else farewell_reply
                 output(
-                    f"turn={turn} reply={farewell_reply} "
+                    f"turn={turn} reply={goodbye} "
                     "reason=conversation-ended"
                 )
-                generated = synthesizer.synthesize(farewell_reply, speech_output)
+                generated = synthesizer.synthesize(goodbye, speech_output)
                 output(f"turn={turn} synthesized={generated}")
                 player.play(generated)
                 output(f"turn={turn} played={generated}")
@@ -407,10 +413,15 @@ def run_conversation_loop(
                 break
 
             if is_mobility_stop_transcript(transcript):
-                if stop_mobility is not None:
-                    stop_mobility()
-                output(f"turn={turn} reply={MOBILITY_STOP_REPLY} reason=mobility-stop")
-                generated = synthesizer.synthesize(MOBILITY_STOP_REPLY, speech_output)
+                stopped = stop_mobility() if stop_mobility is not None else False
+                reply = (
+                    MOBILITY_STOP_REPLY
+                    if stopped
+                    else MOBILITY_ALREADY_STOPPED_REPLY
+                )
+                reason = "mobility-stop" if stopped else "mobility-already-stopped"
+                output(f"turn={turn} reply={reply} reason={reason}")
+                generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
                 player.play(generated)
                 output(f"turn={turn} played={generated}")

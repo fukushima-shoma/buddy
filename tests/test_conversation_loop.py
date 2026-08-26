@@ -10,6 +10,8 @@ from robot.conversation_loop_cli import (
     DEFAULT_INACTIVITY_REPLY,
     MOBILITY_START_REPLY,
     MOBILITY_STOP_REPLY,
+    MOBILITY_ALREADY_STOPPED_REPLY,
+    MOBILITY_FAREWELL_REPLY,
     build_parser,
     is_farewell_transcript,
     is_mobility_start_transcript,
@@ -293,6 +295,53 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(completed, 1)
         self.assertEqual(events, ["stop", "reply"])
         self.assertEqual(synthesizer.inputs, [MOBILITY_STOP_REPLY])
+
+    def test_stop_command_reports_when_robot_was_already_stopped(self) -> None:
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("ストップ"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            stop_mobility=lambda: False,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(synthesizer.inputs, [MOBILITY_ALREADY_STOPPED_REPLY])
+
+    def test_farewell_announces_stop_when_person_follow_was_running(self) -> None:
+        synthesizer = MockSpeechSynthesizer()
+        stops: list[str] = []
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("バイバイ"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            stop_mobility=lambda: stops.append("stop") or True,
+            mobility_active=lambda: True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(stops, ["stop"])
+        self.assertEqual(synthesizer.inputs, [MOBILITY_FAREWELL_REPLY])
 
     def test_silence_does_not_end_session_while_person_follow_is_running(self) -> None:
         logs: list[str] = []
