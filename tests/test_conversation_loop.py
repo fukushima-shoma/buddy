@@ -3,6 +3,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from robot.audio import MockAudioPlayer, MockAudioRecorder, NoSpeechDetectedError
+from robot.child_games import ChildGameController
 from robot.conversation import MockReplyGenerator
 from robot.conversation_loop_cli import (
     CHILD_RETRY_REPLIES,
@@ -12,6 +13,8 @@ from robot.conversation_loop_cli import (
     MOBILITY_STOP_REPLY,
     MOBILITY_ALREADY_STOPPED_REPLY,
     MOBILITY_FAREWELL_REPLY,
+    POWER_GOOD_REPLY,
+    POWER_LOW_REPLY,
     build_parser,
     is_farewell_transcript,
     is_mobility_start_transcript,
@@ -96,6 +99,8 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertIsNone(args.wake_word_device)
         self.assertEqual(args.orientation_backend, "off")
         self.assertEqual(args.mobility_backend, "off")
+        self.assertEqual(args.power_monitor, "off")
+        self.assertFalse(args.child_games)
 
     def test_two_turns_run_complete_pipeline_and_pause_once(self) -> None:
         with TemporaryDirectory() as directory:
@@ -370,6 +375,144 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(
             sum("mobility=running reason=no-speech" in log for log in logs),
             2,
+        )
+
+    def test_reply_interruption_stop_word_stops_mobility_and_confirms(self) -> None:
+        class StopRequestPlayer(MockAudioPlayer):
+            def __init__(self) -> None:
+                super().__init__()
+                self.requested = True
+
+            def consume_stop_request(self) -> bool:
+                requested = self.requested
+                self.requested = False
+                return requested
+
+        stops: list[str] = []
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("こんにちは"),
+            reply_generator=MockReplyGenerator("こんにちは"),
+            synthesizer=synthesizer,
+            player=StopRequestPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            stop_mobility=lambda: stops.append("stop") or True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(stops, ["stop"])
+        self.assertEqual(synthesizer.inputs, ["こんにちは", MOBILITY_STOP_REPLY])
+
+    def test_low_power_blocks_person_follow_start(self) -> None:
+        starts: list[str] = []
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("ついてきて"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            start_mobility=lambda: starts.append("start") or True,
+            power_good=lambda: False,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(starts, [])
+        self.assertEqual(synthesizer.inputs, [POWER_LOW_REPLY])
+
+    def test_low_power_stops_running_person_follow_before_recording(self) -> None:
+        stops: list[str] = []
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("呼ばれない"),
+            reply_generator=MockReplyGenerator(),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            stop_mobility=lambda: stops.append("stop") or True,
+            mobility_active=lambda: True,
+            power_good=lambda: False,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(stops, ["stop"])
+        self.assertEqual(synthesizer.inputs, [POWER_LOW_REPLY])
+
+    def test_power_status_question_is_answered_without_reply_api(self) -> None:
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("電池は大丈夫？"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            power_good=lambda: True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(synthesizer.inputs, [POWER_GOOD_REPLY])
+
+    def test_active_child_game_uses_oshimai_without_ending_conversation(self) -> None:
+        game = ChildGameController()
+        game.handle("どうぶつクイズ")
+        synthesizer = MockSpeechSynthesizer()
+
+        completed = run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("おしまい"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            handle_child_game=game.handle,
+            child_game_active=lambda: game.active,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(completed, 1)
+        self.assertEqual(
+            synthesizer.inputs,
+            ["ゲームはおしまい。また遊ぼうね。"],
         )
 
     def test_negative_turns_are_rejected(self) -> None:

@@ -15,6 +15,7 @@ from robot.audio import (
     generate_tone,
 )
 from robot.audio_cli import create_player, create_recorder
+from robot.child_games import ChildGameController, is_game_end_transcript
 from robot.conversation import (
     DEFAULT_MEMORY_TURNS,
     DEFAULT_REPLY_MODEL,
@@ -33,6 +34,7 @@ from robot.interaction import (
 )
 from robot.mobility import PersonFollowProcessController
 from robot.profile_memory import DEFAULT_PROFILE_MEMORY_PATH, ParentManagedMemory
+from robot.power import RaspberryPiPowerMonitor
 from robot.reply_cli import create_reply_generator
 from robot.speech import (
     DEFAULT_SPEECH_MODEL,
@@ -79,6 +81,12 @@ MOBILITY_STOP_REPLY = "止まったよ。もう動かないよ。"
 MOBILITY_ALREADY_STOPPED_REPLY = "いまは止まっているよ。"
 MOBILITY_FAREWELL_REPLY = "止まったよ。バイバイ。またお話ししようね。"
 MOBILITY_UNAVAILABLE_REPLY = "ごめんね、今は動けないよ。"
+POWER_LOW_REPLY = "電源が弱くなっているから、安全のために止まるね。"
+POWER_GOOD_REPLY = "電源は大丈夫だよ。"
+POWER_UNAVAILABLE_REPLY = "電源を確認できないから、安全のために動かないね。"
+POWER_STATUS_PHRASES = frozenset(
+    {"電池大丈夫", "電池は大丈夫", "バッテリー大丈夫", "バッテリーは大丈夫"}
+)
 
 
 def is_farewell_transcript(transcript: str) -> bool:
@@ -106,6 +114,15 @@ def is_mobility_stop_transcript(transcript: str) -> bool:
         if character.isalnum()
     )
     return normalized in MOBILITY_STOP_PHRASES
+
+
+def is_power_status_transcript(transcript: str) -> bool:
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKC", transcript).casefold()
+        if character.isalnum()
+    )
+    return normalized in POWER_STATUS_PHRASES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +165,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use supervised, age-appropriate replies and recognition retries.",
     )
     parser.add_argument(
+        "--child-games",
+        action="store_true",
+        help="Enable deterministic riddles, animal quizzes, and vehicle quizzes.",
+    )
+    parser.add_argument(
         "--memory",
         choices=("none", "session"),
         default="none",
@@ -186,6 +208,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mobility-stop-distance", type=float, default=60.0)
     parser.add_argument("--mobility-resume-distance", type=float, default=70.0)
     parser.add_argument("--mobility-turn-pulse", type=float, default=0.08)
+    parser.add_argument(
+        "--power-monitor",
+        choices=("off", "raspberry-pi"),
+        default="off",
+        help="Block or stop movement on Raspberry Pi undervoltage.",
+    )
     parser.add_argument(
         "--speech-backend", choices=("mock", "openai"), default="mock"
     )
@@ -305,6 +333,9 @@ def run_conversation_loop(
     start_mobility: Callable[[], bool] | None = None,
     stop_mobility: Callable[[], bool] | None = None,
     mobility_active: Callable[[], bool] | None = None,
+    power_good: Callable[[], bool] | None = None,
+    handle_child_game: Callable[[str], str | None] | None = None,
+    child_game_active: Callable[[], bool] | None = None,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -318,11 +349,58 @@ def run_conversation_loop(
     completed_turns = 0
     recognition_failures = 0
     consecutive_silences = 0
+
+    def play_with_stop_interrupt(source: Path, turn: int) -> None:
+        player.play(source)
+        consume_stop = getattr(player, "consume_stop_request", None)
+        if not callable(consume_stop) or not consume_stop():
+            return
+        stopped = stop_mobility() if stop_mobility is not None else False
+        output(
+            f"turn={turn} mobility={'stopped' if stopped else 'already-stopped'} "
+            "reason=local-voice-interrupt"
+        )
+        confirmation = (
+            MOBILITY_STOP_REPLY if stopped else MOBILITY_ALREADY_STOPPED_REPLY
+        )
+        generated = synthesizer.synthesize(confirmation, speech_output)
+        output(f"turn={turn} interrupt-reply={confirmation}")
+        output(f"turn={turn} interrupt-synthesized={generated}")
+        player.play(generated)
+        consume_stop()
+        output(f"turn={turn} interrupt-played={generated}")
+
+    def read_power_good(turn: int) -> bool | None:
+        if power_good is None:
+            return None
+        try:
+            return power_good()
+        except RuntimeError as exc:
+            output(f"turn={turn} power=error detail={exc}")
+            return None
+
     try:
         while turns == 0 or completed_turns < turns:
             if completed_turns > 0 and pause > 0:
                 sleeper(pause)
             turn = completed_turns + 1
+            if mobility_active is not None and mobility_active():
+                power_state = read_power_good(turn)
+                if power_good is not None and power_state is not True:
+                    if stop_mobility is not None:
+                        stop_mobility()
+                    reply = (
+                        POWER_LOW_REPLY
+                        if power_state is False
+                        else POWER_UNAVAILABLE_REPLY
+                    )
+                    output(f"turn={turn} reply={reply} reason=power-safety-stop")
+                    generated = synthesizer.synthesize(reply, speech_output)
+                    output(f"turn={turn} synthesized={generated}")
+                    play_with_stop_interrupt(generated, turn)
+                    output(f"turn={turn} played={generated}")
+                    completed_turns += 1
+                    continue
             output(f"turn={turn} listening=true")
             try:
                 source = recorder.record(
@@ -351,7 +429,7 @@ def run_conversation_loop(
                         speech_output,
                     )
                     output(f"turn={turn} synthesized={generated}")
-                    player.play(generated)
+                    play_with_stop_interrupt(generated, turn)
                     output(f"turn={turn} played={generated}")
                     completed_turns += 1
                     break
@@ -362,7 +440,7 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={retry} reason=no-speech")
                     generated = synthesizer.synthesize(retry, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    player.play(generated)
+                    play_with_stop_interrupt(generated, turn)
                     output(f"turn={turn} played={generated}")
                     recognition_failures += 1
                 completed_turns += 1
@@ -385,7 +463,7 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={retry} reason={failure_reason}")
                     generated = synthesizer.synthesize(retry, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    player.play(generated)
+                    play_with_stop_interrupt(generated, turn)
                     output(f"turn={turn} played={generated}")
                     recognition_failures += 1
                 else:
@@ -394,7 +472,29 @@ def run_conversation_loop(
                 continue
 
             recognition_failures = 0
-            if is_farewell_transcript(transcript):
+            if is_power_status_transcript(transcript) and power_good is not None:
+                power_state = read_power_good(turn)
+                reply = (
+                    POWER_GOOD_REPLY
+                    if power_state is True
+                    else POWER_LOW_REPLY
+                    if power_state is False
+                    else POWER_UNAVAILABLE_REPLY
+                )
+                output(f"turn={turn} reply={reply} reason=power-status")
+                generated = synthesizer.synthesize(reply, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                play_with_stop_interrupt(generated, turn)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
+
+            game_handles_end = (
+                child_game_active is not None
+                and child_game_active()
+                and is_game_end_transcript(transcript)
+            )
+            if is_farewell_transcript(transcript) and not game_handles_end:
                 was_moving = (
                     mobility_active is not None and mobility_active()
                 )
@@ -407,7 +507,7 @@ def run_conversation_loop(
                 )
                 generated = synthesizer.synthesize(goodbye, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                player.play(generated)
+                play_with_stop_interrupt(generated, turn)
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 break
@@ -423,7 +523,7 @@ def run_conversation_loop(
                 output(f"turn={turn} reply={reply} reason={reason}")
                 generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                player.play(generated)
+                play_with_stop_interrupt(generated, turn)
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -431,7 +531,19 @@ def run_conversation_loop(
             if is_mobility_start_transcript(transcript):
                 reply = MOBILITY_UNAVAILABLE_REPLY
                 reason = "mobility-unavailable"
-                if start_mobility is not None:
+                power_state = read_power_good(turn)
+                if power_good is not None and power_state is not True:
+                    reply = (
+                        POWER_LOW_REPLY
+                        if power_state is False
+                        else POWER_UNAVAILABLE_REPLY
+                    )
+                    reason = (
+                        "power-low"
+                        if power_state is False
+                        else "power-unavailable"
+                    )
+                elif start_mobility is not None:
                     try:
                         started = start_mobility()
                         reply = (
@@ -445,16 +557,27 @@ def run_conversation_loop(
                 output(f"turn={turn} reply={reply} reason={reason}")
                 generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                player.play(generated)
+                play_with_stop_interrupt(generated, turn)
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
+
+            if handle_child_game is not None:
+                game_reply = handle_child_game(transcript)
+                if game_reply is not None:
+                    output(f"turn={turn} reply={game_reply} reason=child-game")
+                    generated = synthesizer.synthesize(game_reply, speech_output)
+                    output(f"turn={turn} synthesized={generated}")
+                    play_with_stop_interrupt(generated, turn)
+                    output(f"turn={turn} played={generated}")
+                    completed_turns += 1
+                    continue
 
             reply = reply_generator.reply(transcript)
             output(f"turn={turn} reply={reply}")
             generated = synthesizer.synthesize(reply, speech_output)
             output(f"turn={turn} synthesized={generated}")
-            player.play(generated)
+            play_with_stop_interrupt(generated, turn)
             output(f"turn={turn} played={generated}")
             if on_exchange is not None:
                 try:
@@ -510,6 +633,12 @@ def main() -> int:
         args.playback_device,
         capture_device=args.audio_device,
         interruption_threshold=args.barge_in_threshold,
+        stop_word_model=(
+            args.wake_word_model
+            if args.mobility_backend == "person-follow"
+            and args.playback_backend == "alsa-interruptible"
+            else None
+        ),
     )
     turns = "until-Ctrl+C" if args.turns == 0 else str(args.turns)
     print(
@@ -530,6 +659,12 @@ def main() -> int:
         if args.auto_conversation_memory
         else None
     )
+    power_monitor = (
+        RaspberryPiPowerMonitor()
+        if args.power_monitor == "raspberry-pi"
+        else None
+    )
+    child_game = ChildGameController() if args.child_games else None
     mobility = (
         PersonFollowProcessController(
             speed=args.mobility_speed,
@@ -608,6 +743,15 @@ def main() -> int:
             start_mobility=None if mobility is None else mobility.start,
             stop_mobility=None if mobility is None else mobility.stop,
             mobility_active=None if mobility is None else lambda: mobility.active,
+            power_good=(
+                None if power_monitor is None else power_monitor.is_power_good
+            ),
+            handle_child_game=(
+                None if child_game is None else child_game.handle
+            ),
+            child_game_active=(
+                None if child_game is None else lambda: child_game.active
+            ),
             reject_transcript=(
                 is_unreliable_child_transcript if args.child_mode else None
             ),

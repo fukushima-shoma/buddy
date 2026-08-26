@@ -60,6 +60,7 @@ def create_player(
     *,
     capture_device: str | None = None,
     interruption_threshold: float = 2500.0,
+    stop_word_model: Path | None = None,
 ) -> AudioPlayer:
     if backend == "mock":
         return MockAudioPlayer()
@@ -68,6 +69,7 @@ def create_player(
             device=device,
             capture_device=capture_device,
             threshold=interruption_threshold,
+            stop_word_model=stop_word_model,
         )
     return AlsaAudioPlayer(device=device)
 

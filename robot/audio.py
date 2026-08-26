@@ -3,12 +3,14 @@ from __future__ import annotations
 from array import array
 from collections import deque
 from dataclasses import dataclass
+import json
 import math
 from pathlib import Path
 import struct
 import subprocess
 import sys
 from typing import Any, Callable, Protocol, Sequence
+import unicodedata
 import wave
 
 
@@ -300,6 +302,8 @@ class InterruptibleAlsaAudioPlayer:
         chunk_duration: float = 0.1,
         ignore_duration: float = 0.6,
         confirm_chunks: int = 2,
+        stop_word_model: Path | None = None,
+        stop_recognizer: Any | None = None,
         process_factory: Callable[..., Any] = subprocess.Popen,
     ) -> None:
         self.device = device
@@ -311,6 +315,48 @@ class InterruptibleAlsaAudioPlayer:
         self.confirm_chunks = max(1, confirm_chunks)
         self._process_factory = process_factory
         self.last_interrupted = False
+        self.last_stop_requested = False
+        self._stop_model: Any | None = None
+        if stop_recognizer is None and stop_word_model is not None:
+            try:
+                import vosk
+            except ImportError as exc:
+                raise RuntimeError(
+                    "vosk is required for local stop-word recognition."
+                ) from exc
+            model_path = stop_word_model.expanduser().resolve()
+            if not model_path.is_dir():
+                raise RuntimeError(f"Vosk model directory not found: {model_path}")
+            vosk.SetLogLevel(-1)
+            self._stop_model = vosk.Model(str(model_path))
+            grammar = json.dumps(["止まって", "ストップ", "[unk]"], ensure_ascii=False)
+            stop_recognizer = vosk.KaldiRecognizer(
+                self._stop_model,
+                self.sample_rate,
+                grammar,
+            )
+        self._stop_recognizer = stop_recognizer
+        self._stop_targets = {"止まって", "とまって", "ストップ"}
+
+    @staticmethod
+    def _normalized_recognition(payload: str) -> str:
+        try:
+            result = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+        if not isinstance(result, dict):
+            return ""
+        text = result.get("partial") or result.get("text") or ""
+        return "".join(
+            character
+            for character in unicodedata.normalize("NFKC", str(text)).casefold()
+            if character.isalnum()
+        )
+
+    def consume_stop_request(self) -> bool:
+        requested = self.last_stop_requested
+        self.last_stop_requested = False
+        return requested
 
     def play(self, source: Path) -> None:
         playback = self._process_factory(
@@ -330,6 +376,9 @@ class InterruptibleAlsaAudioPlayer:
         active_chunks = 0
         observed_chunks = 0
         self.last_interrupted = False
+        self.last_stop_requested = False
+        if self._stop_recognizer is not None:
+            self._stop_recognizer.Reset()
         try:
             if capture.stdout is None:
                 raise RuntimeError("arecord did not provide an audio stream")
@@ -338,6 +387,19 @@ class InterruptibleAlsaAudioPlayer:
                 if len(chunk) != chunk_bytes:
                     break
                 observed_chunks += 1
+                if self._stop_recognizer is not None:
+                    completed = self._stop_recognizer.AcceptWaveform(chunk)
+                    payload = (
+                        self._stop_recognizer.Result()
+                        if completed
+                        else self._stop_recognizer.PartialResult()
+                    )
+                    if self._normalized_recognition(payload) in self._stop_targets:
+                        playback.terminate()
+                        playback.wait(timeout=1)
+                        self.last_interrupted = True
+                        self.last_stop_requested = True
+                        break
                 if observed_chunks <= self.ignore_chunks:
                     continue
                 active_chunks = active_chunks + 1 if pcm16_rms(chunk) >= self.threshold else 0

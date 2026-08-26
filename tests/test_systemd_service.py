@@ -17,6 +17,8 @@ class SystemdServiceTest(unittest.TestCase):
         self.assertIn("--auto-conversation-memory", service)
         self.assertIn("--mobility-backend person-follow", service)
         self.assertIn("--mobility-stop-distance 60", service)
+        self.assertIn("--power-monitor raspberry-pi", service)
+        self.assertIn("--child-games", service)
         self.assertIn("--child-mode", service)
         self.assertIn("--audio-device plughw:CARD=Plus,DEV=0", service)
         self.assertNotIn("--orientation-backend gpiozero", service)

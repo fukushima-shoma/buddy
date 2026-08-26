@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from array import array
+import json
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,6 +23,26 @@ from robot.audio_cli import build_parser
 
 
 class AudioTest(unittest.TestCase):
+    class FakeStopRecognizer:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.reset_calls = 0
+
+        def Reset(self) -> None:
+            self.calls = 0
+            self.reset_calls += 1
+
+        def AcceptWaveform(self, chunk: bytes) -> bool:
+            self.calls += 1
+            return False
+
+        def PartialResult(self) -> str:
+            text = "止まって" if self.calls >= 2 else "止ま"
+            return json.dumps({"partial": text}, ensure_ascii=False)
+
+        def Result(self) -> str:
+            return '{"text": ""}'
+
     class FakeStdout:
         def __init__(self, chunks: list[bytes]) -> None:
             self.chunks = list(chunks)
@@ -135,6 +156,29 @@ class AudioTest(unittest.TestCase):
         self.assertTrue(capture.terminated)
         self.assertEqual(commands[0][0], "aplay")
         self.assertEqual(commands[1][0], "arecord")
+
+    def test_interruptible_player_detects_local_stop_word_once(self) -> None:
+        playback = self.FakeProcess([])
+        capture = self.FakeProcess([self.pcm_chunk(100), self.pcm_chunk(100)])
+        processes = iter([playback, capture])
+        recognizer = self.FakeStopRecognizer()
+
+        player = InterruptibleAlsaAudioPlayer(
+            sample_rate=1000,
+            chunk_duration=0.1,
+            ignore_duration=0.6,
+            threshold=10000,
+            stop_recognizer=recognizer,
+            process_factory=lambda *args, **kwargs: next(processes),
+        )
+
+        player.play(Path("reply.wav"))
+
+        self.assertTrue(playback.terminated)
+        self.assertTrue(player.last_interrupted)
+        self.assertTrue(player.consume_stop_request())
+        self.assertFalse(player.consume_stop_request())
+        self.assertEqual(recognizer.reset_calls, 1)
 
     def test_cli_defaults_are_hardware_safe(self) -> None:
         record = build_parser().parse_args(["record"])

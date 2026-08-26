@@ -16,6 +16,7 @@ ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
   --transcription-backend openai \
   --reply-backend openai \
   --child-mode \
+  --child-games \
   --memory session \
   --memory-turns 30 \
   --auto-conversation-memory \
@@ -23,6 +24,7 @@ ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
   --mobility-backend person-follow \
   --mobility-stop-distance 60 \
   --mobility-resume-distance 70 \
+  --power-monitor raspberry-pi \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa-interruptible \
