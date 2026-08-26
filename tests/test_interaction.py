@@ -180,6 +180,18 @@ class InteractionTest(unittest.TestCase):
         self.assertTrue(
             wake_phrase_detected('{"partial": "ねえ、バディ！"}', targets)
         )
+        self.assertFalse(
+            wake_phrase_detected('{"partial": "今日は遊ぼう"}', targets)
+        )
+        self.assertFalse(
+            wake_phrase_detected(
+                '{"partial": "ねえバディって言ってみた"}',
+                targets,
+            )
+        )
+        self.assertFalse(
+            wake_phrase_detected('{"text": "バイバイ"}', targets)
+        )
         self.assertFalse(wake_phrase_detected("not-json", targets))
         self.assertFalse(wake_phrase_detected("[]", targets))
 

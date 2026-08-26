@@ -91,7 +91,7 @@ def wake_phrase_detected(payload: str, targets: tuple[str, ...]) -> bool:
         return False
     text = result.get("partial") or result.get("text") or ""
     normalized = normalize_wake_phrase(str(text))
-    return bool(normalized) and any(target in normalized for target in targets)
+    return bool(normalized) and normalized in targets
 
 
 class VoskWakeWordTrigger:
