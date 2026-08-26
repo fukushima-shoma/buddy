@@ -14,7 +14,9 @@ fi
 for required_path in \
   "$buddy_dir/.env" \
   "$buddy_dir/.venv/bin/python" \
-  "$buddy_dir/models/wakeword/vosk-model-small-ja-0.22"; do
+  "$buddy_dir/models/wakeword/vosk-model-small-ja-0.22" \
+  "$buddy_dir/models/person_detection/person_detection_mediapipe_2023mar.onnx" \
+  "$buddy_dir/models/person_detection/mp_persondet.py"; do
   if [[ ! -e "$required_path" ]]; then
     echo "Missing required path: $required_path" >&2
     exit 1

@@ -20,6 +20,9 @@ ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
   --memory-turns 30 \
   --auto-conversation-memory \
   --conversation-memory-turns 20 \
+  --mobility-backend person-follow \
+  --mobility-stop-distance 60 \
+  --mobility-resume-distance 70 \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa-interruptible \

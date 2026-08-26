@@ -31,6 +31,7 @@ from robot.interaction import (
     create_start_trigger,
     run_interaction_station,
 )
+from robot.mobility import PersonFollowProcessController
 from robot.profile_memory import DEFAULT_PROFILE_MEMORY_PATH, ParentManagedMemory
 from robot.reply_cli import create_reply_generator
 from robot.speech import (
@@ -70,6 +71,12 @@ FAREWELL_PHRASES = frozenset(
 DEFAULT_FAREWELL_REPLY = "バイバイ。またお話ししようね。"
 DEFAULT_MAX_SILENCE_TURNS = 2
 DEFAULT_INACTIVITY_REPLY = "お話はおしまいかな。またお話ししようね。"
+MOBILITY_START_PHRASES = frozenset({"ついてきて", "ついて来て"})
+MOBILITY_STOP_PHRASES = frozenset({"止まって", "とまって", "ストップ"})
+MOBILITY_START_REPLY = "うん、ついていくね。危ないときは、止まってって言ってね。"
+MOBILITY_ALREADY_RUNNING_REPLY = "もう、ついていっているよ。"
+MOBILITY_STOP_REPLY = "止まったよ。"
+MOBILITY_UNAVAILABLE_REPLY = "ごめんね、今は動けないよ。"
 
 
 def is_farewell_transcript(transcript: str) -> bool:
@@ -79,6 +86,24 @@ def is_farewell_transcript(transcript: str) -> bool:
         if character.isalnum()
     )
     return normalized in FAREWELL_PHRASES
+
+
+def is_mobility_start_transcript(transcript: str) -> bool:
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKC", transcript).casefold()
+        if character.isalnum()
+    )
+    return normalized in MOBILITY_START_PHRASES
+
+
+def is_mobility_stop_transcript(transcript: str) -> bool:
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKC", transcript).casefold()
+        if character.isalnum()
+    )
+    return normalized in MOBILITY_STOP_PHRASES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -149,6 +174,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_CONVERSATION_MEMORY_PATH,
     )
     parser.add_argument("--conversation-memory-turns", type=int, default=20)
+    parser.add_argument(
+        "--mobility-backend",
+        choices=("off", "person-follow"),
+        default="off",
+        help="Allow exact spoken commands to start and stop person following.",
+    )
+    parser.add_argument("--mobility-speed", type=float, default=1.0)
+    parser.add_argument("--mobility-stop-distance", type=float, default=60.0)
+    parser.add_argument("--mobility-resume-distance", type=float, default=70.0)
+    parser.add_argument("--mobility-turn-pulse", type=float, default=0.08)
     parser.add_argument(
         "--speech-backend", choices=("mock", "openai"), default="mock"
     )
@@ -265,6 +300,9 @@ def run_conversation_loop(
     max_silence_turns: int = DEFAULT_MAX_SILENCE_TURNS,
     inactivity_reply: str = DEFAULT_INACTIVITY_REPLY,
     on_exchange: Callable[[str, str], None] | None = None,
+    start_mobility: Callable[[], bool] | None = None,
+    stop_mobility: Callable[[], bool] | None = None,
+    mobility_active: Callable[[], bool] | None = None,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -292,6 +330,11 @@ def run_conversation_loop(
                 )
             except NoSpeechDetectedError:
                 output(f"turn={turn} transcript=not-found reason=no-speech")
+                if mobility_active is not None and mobility_active():
+                    output(f"turn={turn} mobility=running reason=no-speech")
+                    consecutive_silences = 0
+                    completed_turns += 1
+                    continue
                 consecutive_silences += 1
                 if (
                     max_silence_turns > 0
@@ -350,6 +393,8 @@ def run_conversation_loop(
 
             recognition_failures = 0
             if is_farewell_transcript(transcript):
+                if stop_mobility is not None:
+                    stop_mobility()
                 output(
                     f"turn={turn} reply={farewell_reply} "
                     "reason=conversation-ended"
@@ -360,6 +405,39 @@ def run_conversation_loop(
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 break
+
+            if is_mobility_stop_transcript(transcript):
+                if stop_mobility is not None:
+                    stop_mobility()
+                output(f"turn={turn} reply={MOBILITY_STOP_REPLY} reason=mobility-stop")
+                generated = synthesizer.synthesize(MOBILITY_STOP_REPLY, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                player.play(generated)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
+
+            if is_mobility_start_transcript(transcript):
+                reply = MOBILITY_UNAVAILABLE_REPLY
+                reason = "mobility-unavailable"
+                if start_mobility is not None:
+                    try:
+                        started = start_mobility()
+                        reply = (
+                            MOBILITY_START_REPLY
+                            if started
+                            else MOBILITY_ALREADY_RUNNING_REPLY
+                        )
+                        reason = "mobility-start" if started else "mobility-running"
+                    except RuntimeError as exc:
+                        output(f"turn={turn} mobility=error detail={exc}")
+                output(f"turn={turn} reply={reply} reason={reason}")
+                generated = synthesizer.synthesize(reply, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                player.play(generated)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
 
             reply = reply_generator.reply(transcript)
             output(f"turn={turn} reply={reply}")
@@ -441,6 +519,17 @@ def main() -> int:
         if args.auto_conversation_memory
         else None
     )
+    mobility = (
+        PersonFollowProcessController(
+            speed=args.mobility_speed,
+            stop_distance=args.mobility_stop_distance,
+            resume_distance=args.mobility_resume_distance,
+            turn_pulse=args.mobility_turn_pulse,
+            working_directory=Path.cwd(),
+        )
+        if args.mobility_backend == "person-follow"
+        else None
+    )
     orient_session: Callable[[], str] | None = None
     if args.orientation_backend != "off":
         from robot.conversation_orientation import orient_to_person
@@ -505,6 +594,9 @@ def main() -> int:
             retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
             max_silence_turns=args.max_silence_turns,
             on_exchange=remember_exchange,
+            start_mobility=None if mobility is None else mobility.start,
+            stop_mobility=None if mobility is None else mobility.stop,
+            mobility_active=None if mobility is None else lambda: mobility.active,
             reject_transcript=(
                 is_unreliable_child_transcript if args.child_mode else None
             ),
@@ -512,7 +604,11 @@ def main() -> int:
         )
 
     if args.start_trigger == "immediate":
-        run_session()
+        try:
+            run_session()
+        finally:
+            if mobility is not None:
+                mobility.close()
         return 0
 
     trigger = create_start_trigger(
@@ -538,12 +634,16 @@ def main() -> int:
         if wake_chime is not None:
             player.play(wake_chime)
 
-    run_interaction_station(
-        trigger=trigger,
-        run_session=lambda: run_session(catch_interrupt=False),
-        sessions=args.sessions,
-        reset_session=prepare_session,
-    )
+    try:
+        run_interaction_station(
+            trigger=trigger,
+            run_session=lambda: run_session(catch_interrupt=False),
+            sessions=args.sessions,
+            reset_session=prepare_session,
+        )
+    finally:
+        if mobility is not None:
+            mobility.close()
     return 0
 
 

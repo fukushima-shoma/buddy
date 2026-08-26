@@ -15,9 +15,12 @@ class SystemdServiceTest(unittest.TestCase):
         self.assertIn("EnvironmentFile=/home/shofukus/buddy/.env", service)
         self.assertIn("--start-trigger wakeword", service)
         self.assertIn("--auto-conversation-memory", service)
+        self.assertIn("--mobility-backend person-follow", service)
+        self.assertIn("--mobility-stop-distance 60", service)
         self.assertIn("--child-mode", service)
         self.assertIn("--audio-device plughw:CARD=Plus,DEV=0", service)
         self.assertNotIn("--orientation-backend gpiozero", service)
+        self.assertNotIn("-m robot.person_follow_cli", service)
         self.assertIn("Restart=on-failure", service)
 
     def test_installer_checks_private_runtime_files_before_enabling(self) -> None:
@@ -27,6 +30,7 @@ class SystemdServiceTest(unittest.TestCase):
 
         self.assertIn('"$buddy_dir/.env"', installer)
         self.assertIn('"$buddy_dir/.venv/bin/python"', installer)
+        self.assertIn("person_detection_mediapipe_2023mar.onnx", installer)
         self.assertIn("OPENAI_API_KEY is missing or empty", installer)
         self.assertIn('chmod 600 "$buddy_dir/.env"', installer)
         self.assertIn("systemctl enable --now", installer)
