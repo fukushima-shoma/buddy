@@ -309,6 +309,57 @@ Buddyの返答中に大きめの声が2回連続で検出されると再生を�
 標準の呼びかけは`ねえ バディ`。別の言い方を試す場合は、例えば
 `--wake-phrase バディ`を追加する。`models/wakeword/`は`.gitignore`で除外している。
 
+### ラズパイ起動時にBuddyも自動起動する
+
+APIキーをGit対象外の`.env`へ保存する。すでに`.env`がある場合は上書きしない。
+
+```sh
+cd ~/buddy
+cp -n .env.example .env
+nano .env
+chmod 600 .env
+```
+
+`.env`の`OPENAI_API_KEY=`の後ろへAPIキーを記入する。サービスは、EMEETの安定した
+ALSAカード名`plughw:CARD=Plus,DEV=0`を使うため、再起動後にカード番号が変わっても
+影響を受けにくい。次の導入スクリプトは、仮想環境、`.env`、Voskモデルが揃っている
+ことを確認してからサービスを有効にする。
+
+```sh
+cd ~/buddy
+chmod +x scripts/install_buddy_service.sh
+./scripts/install_buddy_service.sh
+```
+
+導入後はラズパイを起動するとBuddyも立ち上がり、`ねえ、バディ`の呼びかけ待ちに入る。
+会話履歴の自動保存も有効になる。人物追従や会話前の旋回は自動起動に含めていないため、
+起動しただけでモーターが走り出すことはない。
+
+状態とログを確認する。
+
+```sh
+sudo systemctl status buddy-conversation.service
+sudo journalctl -u buddy-conversation.service -f
+```
+
+一時停止、再開、設定変更後の再起動は次のとおり。
+
+```sh
+sudo systemctl stop buddy-conversation.service
+sudo systemctl start buddy-conversation.service
+sudo systemctl restart buddy-conversation.service
+```
+
+OS起動時の自動起動を解除する場合は、停止と無効化を同時に行う。
+
+```sh
+sudo systemctl disable --now buddy-conversation.service
+```
+
+サービス設定はRaspberry Piのユーザー`shofukus`、配置先`/home/shofukus/buddy`を前提と
+する。ユーザー名や配置先を変えた場合は`infra/buddy-conversation.service`内の
+`User`、`Group`、各パスを合わせて変更する。
+
 会話開始前に人物の方向へ短く旋回する機能は、まずモーターを動かさないモックで
 カメラ判定だけを確認する。
 

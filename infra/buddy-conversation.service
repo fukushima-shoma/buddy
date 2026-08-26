@@ -1,0 +1,38 @@
+[Unit]
+Description=Buddy wake-word conversation service
+Wants=network-online.target
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+User=shofukus
+Group=shofukus
+WorkingDirectory=/home/shofukus/buddy
+EnvironmentFile=/home/shofukus/buddy/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
+  --audio-backend alsa-vad \
+  --audio-device plughw:CARD=Plus,DEV=0 \
+  --transcription-backend openai \
+  --reply-backend openai \
+  --child-mode \
+  --memory session \
+  --memory-turns 30 \
+  --auto-conversation-memory \
+  --conversation-memory-turns 20 \
+  --speech-backend openai \
+  --speech-style calm \
+  --playback-backend alsa-interruptible \
+  --playback-device plughw:CARD=Plus,DEV=0 \
+  --turns 0 \
+  --max-silence-turns 2 \
+  --start-trigger wakeword \
+  --wake-word-model /home/shofukus/buddy/models/wakeword/vosk-model-small-ja-0.22
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=15
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

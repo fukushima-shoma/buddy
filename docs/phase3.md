@@ -362,6 +362,16 @@ Guidanceでは、13歳未満または地域のデジタル同意年齢未満の�
 
 [OpenAI Under 18 API Guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance)
 
+## Step 10: systemdで会話待機を自動起動する
+
+`infra/buddy-conversation.service`は、ラズパイの起動後に会話プログラムを自動起動し、
+異常終了時は5秒後に再起動する。APIキーはGit対象外の`/home/shofukus/buddy/.env`から
+読み込む。会話の開始方式はウェイクワード、会話履歴はローカル自動保存、人物追従と
+モーター旋回は無効になっている。
+
+導入、ログ確認、停止方法は`docs/commands.md`の
+「ラズパイ起動時にBuddyも自動起動する」を参照する。
+
 ## 安全上の注意
 
 - 最初は音量を小さくする。
