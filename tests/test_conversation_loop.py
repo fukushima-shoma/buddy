@@ -67,6 +67,11 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.memory, "none")
         self.assertEqual(args.memory_turns, 30)
         self.assertEqual(args.profile_memory, Path("data/buddy-memory.json"))
+        self.assertFalse(args.auto_conversation_memory)
+        self.assertEqual(
+            args.conversation_memory_file,
+            Path("data/conversation-memory.json"),
+        )
         self.assertEqual(args.speech_backend, "mock")
         self.assertEqual(args.speech_style, "calm")
         self.assertEqual(args.playback_backend, "mock")
@@ -109,6 +114,29 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(len(player.played), 2)
             self.assertEqual(pauses, [0.25])
             self.assertIn("turn=2 reply=返事", logs)
+
+    def test_successful_exchange_is_sent_to_persistent_memory_callback(self) -> None:
+        exchanges: list[tuple[str, str]] = []
+
+        completed = run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("青が好き"),
+            reply_generator=MockReplyGenerator("青、きれいだね"),
+            synthesizer=MockSpeechSynthesizer(),
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            on_exchange=lambda user, assistant: exchanges.append((user, assistant)),
+            output=lambda _: None,
+        )
+
+        self.assertEqual(completed, 1)
+        self.assertEqual(exchanges, [("青が好き", "青、きれいだね")])
 
     def test_empty_transcript_skips_reply_speech_and_playback(self) -> None:
         with TemporaryDirectory() as directory:

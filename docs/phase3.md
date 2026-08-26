@@ -264,12 +264,24 @@ python -m robot.conversation_loop_cli \
 `--memory session`を付けると、直前までの会話をOpenAI Responses APIの
 `previous_response_id`で次の返答へ引き継ぐ。Buddyの安全指示は毎ターン送信し、
 既定では30回返答すると文脈をリセットする。長さは`--memory-turns 20`のように変更できる。
-このプログラムは文字起こしや返答の履歴ファイルを作らないが、入力音声と返答音声の
-WAVには各ターンの最新内容が残る。
+通常は文字起こしや返答の履歴ファイルを作らないが、入力音声と返答音声のWAVには
+各ターンの最新内容が残る。
 
 セッションをまたいで残す情報は`robot.memory_cli`で保護者が明示的に登録する。
 保存先はGit対象外の`data/buddy-memory.json`で、一覧表示・個別削除・全削除が可能。
 子どもの発話から氏名や好みを自動抽出して保存することはしない。
+
+`--auto-conversation-memory`を明示すると、各ターンの文字起こしとBuddyの返答を
+`data/conversation-memory.json`へ自動保存し、次の会話セッションで直近の内容を参考に
+できる。既定は最大100往復を保存し、直近20往復を会話へ渡す。音声ファイルは会話記憶へ
+複製しない。メールアドレスと電話番号は保存前に置換するが、すべての個人情報を完全には
+判定できないため、保護者が`robot.conversation_memory_cli list`で定期的に確認する。
+
+```sh
+python -m robot.conversation_memory_cli list --limit 20
+python -m robot.conversation_memory_cli delete-session SESSION_ID
+python -m robot.conversation_memory_cli clear --yes
+```
 
 ### 待機・会話状態を切り替える
 

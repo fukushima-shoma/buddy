@@ -86,6 +86,7 @@ class OpenAIReplyGenerator:
                 ) from exc
             client = OpenAI()
         self.model = model
+        self._base_instructions = instructions
         self.instructions = instructions
         self.remember_context = remember_context
         self.max_context_turns = max(1, max_context_turns)
@@ -121,3 +122,11 @@ class OpenAIReplyGenerator:
     def reset_context(self) -> None:
         self._previous_response_id = None
         self._context_turns = 0
+
+    def set_supplemental_context(self, context: str) -> None:
+        context = context.strip()
+        self.instructions = (
+            f"{self._base_instructions}\n\n{context}"
+            if context
+            else self._base_instructions
+        )

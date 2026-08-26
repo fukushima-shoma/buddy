@@ -109,6 +109,17 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(responses.calls[1]["previous_response_id"], "resp_1")
         self.assertNotIn("previous_response_id", responses.calls[2])
 
+    def test_supplemental_context_updates_instructions(self) -> None:
+        responses = FakeResponses()
+        generator = OpenAIReplyGenerator(
+            client=SimpleNamespace(responses=responses),
+        )
+        generator.set_supplemental_context("子ども: 青が好き")
+
+        generator.reply("前に何を話した？")
+
+        self.assertIn("子ども: 青が好き", responses.calls[0]["instructions"])
+
     def test_cli_defaults_do_not_call_openai(self) -> None:
         args = build_parser().parse_args(["こんにちは"])
 

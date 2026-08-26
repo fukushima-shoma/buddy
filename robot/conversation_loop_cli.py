@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 from typing import Callable
 import unicodedata
+from uuid import uuid4
 
 from robot.audio import (
     AlsaVoiceActivatedRecorder,
@@ -18,6 +19,11 @@ from robot.conversation import (
     DEFAULT_MEMORY_TURNS,
     DEFAULT_REPLY_MODEL,
     ReplyGenerator,
+)
+from robot.conversation_memory import (
+    DEFAULT_CONVERSATION_MEMORY_PATH,
+    ConversationMemoryStore,
+    format_conversation_memory,
 )
 from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
@@ -133,6 +139,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Parent-managed local profile memory JSON file.",
     )
     parser.add_argument(
+        "--auto-conversation-memory",
+        action="store_true",
+        help="Persist conversation text locally for later sessions.",
+    )
+    parser.add_argument(
+        "--conversation-memory-file",
+        type=Path,
+        default=DEFAULT_CONVERSATION_MEMORY_PATH,
+    )
+    parser.add_argument("--conversation-memory-turns", type=int, default=20)
+    parser.add_argument(
         "--speech-backend", choices=("mock", "openai"), default="mock"
     )
     parser.add_argument("--speech-model", default=DEFAULT_SPEECH_MODEL)
@@ -247,6 +264,7 @@ def run_conversation_loop(
     farewell_reply: str = DEFAULT_FAREWELL_REPLY,
     max_silence_turns: int = DEFAULT_MAX_SILENCE_TURNS,
     inactivity_reply: str = DEFAULT_INACTIVITY_REPLY,
+    on_exchange: Callable[[str, str], None] | None = None,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -349,6 +367,11 @@ def run_conversation_loop(
             output(f"turn={turn} synthesized={generated}")
             player.play(generated)
             output(f"turn={turn} played={generated}")
+            if on_exchange is not None:
+                try:
+                    on_exchange(transcript, reply)
+                except RuntimeError as exc:
+                    output(f"turn={turn} memory=error detail={exc}")
             completed_turns += 1
     except KeyboardInterrupt:
         if not catch_interrupt:
@@ -413,6 +436,11 @@ def main() -> int:
             "child-mode=supervised-test-only "
             "personal-data=do-not-share-without-required-data-controls"
         )
+    conversation_store = (
+        ConversationMemoryStore(args.conversation_memory_file)
+        if args.auto_conversation_memory
+        else None
+    )
     orient_session: Callable[[], str] | None = None
     if args.orientation_backend != "off":
         from robot.conversation_orientation import orient_to_person
@@ -442,6 +470,23 @@ def main() -> int:
             )
 
     def run_session(*, catch_interrupt: bool = True) -> int:
+        session_id = uuid4().hex
+        remember_exchange: Callable[[str, str], None] | None = None
+        if conversation_store is not None:
+            context = format_conversation_memory(
+                conversation_store.recent(args.conversation_memory_turns)
+            )
+            set_context = getattr(reply_generator, "set_supplemental_context", None)
+            if callable(set_context):
+                set_context(context)
+
+            def remember_exchange(user: str, assistant: str) -> None:
+                conversation_store.append(
+                    session=session_id,
+                    user=user,
+                    assistant=assistant,
+                )
+
         if orient_session is not None:
             orient_session()
         return run_conversation_loop(
@@ -459,6 +504,7 @@ def main() -> int:
             pause=args.pause,
             retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
             max_silence_turns=args.max_silence_turns,
+            on_exchange=remember_exchange,
             reject_transcript=(
                 is_unreliable_child_transcript if args.child_mode else None
             ),

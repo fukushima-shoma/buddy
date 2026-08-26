@@ -143,8 +143,7 @@ python -m robot.conversation_loop_cli \
 会話中に「バイバイ」「またね」「さようなら」「おしまい」のいずれかを単独で話すと、
 Buddyがお別れを返して、その会話セッションを指定ターン数より前に終了する。
 
-保護者が確認した情報だけを次回以降も覚えさせる場合は、ローカル記憶を管理する。
-子どもの会話から情報を自動保存することはない。
+好きな色など、保護者が確認した固定プロフィールはローカル記憶で管理する。
 
 ```sh
 python -m robot.memory_cli set 好きな色 青
@@ -161,6 +160,27 @@ python -m robot.memory_cli clear --yes
 
 記憶は`data/buddy-memory.json`だけに保存され、Gitの対象外になる。会話コマンドは
 このファイルが存在すると保護者登録情報を読み込む。
+
+会話そのものを次回の会話でも覚えさせる場合は、会話コマンドへ次を追加する。
+
+```sh
+--auto-conversation-memory \
+--conversation-memory-turns 20
+```
+
+文字起こしとBuddyの返答を`data/conversation-memory.json`へ自動保存する。音声は会話
+記憶へ複製しない。最大100往復だけを残し、新しい会話セッションの開始時に直近20往復を
+参考情報として渡す。メールアドレスと電話番号は保存前に自動で置換される。ただし、氏名や
+住所などを完全に自動判別するものではないため、保護者が定期的に内容を確認する。
+
+```sh
+python -m robot.conversation_memory_cli list --limit 20
+python -m robot.conversation_memory_cli delete-session SESSION_ID
+python -m robot.conversation_memory_cli clear --yes
+```
+
+`list`に表示された`session=`の値を`delete-session`へ渡すと、その会話だけを削除できる。
+記憶ファイルはGit対象外だが、ラズパイを譲渡・廃棄するときは`clear --yes`で消去する。
 
 3歳半向けの短い返答、1つの質問、二択、聞き取り失敗時の音声再質問を有効にする。
 保護者同席で、最初は有限ターンかつ履歴なしで試す。
@@ -265,6 +285,8 @@ python -m robot.conversation_loop_cli \
   --child-mode \
   --memory session \
   --memory-turns 30 \
+  --auto-conversation-memory \
+  --conversation-memory-turns 20 \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa-interruptible \
@@ -277,6 +299,7 @@ python -m robot.conversation_loop_cli \
 
 `state=waiting trigger=wakeword`の間に「ねえ、バディ」と呼ぶ。検出すると短い起動音が
 鳴り、`state=conversation`へ切り替わる。会話は最大30返答分の文脈を引き継ぐ。
+以前のセッションからは、ローカルに保存した直近20往復だけを参考情報として引き継ぐ。
 会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
 10秒間の無音が2回続いた場合も、「お話はおしまいかな。またお話ししようね。」と
 話して待機へ戻る。無効化する場合は`--max-silence-turns 0`を指定する。
