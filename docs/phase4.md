@@ -117,12 +117,16 @@ rosdep install \
   --ignore-src \
   --rosdistro lyrical \
   -y \
-  --skip-keys "fastcdr rti-connext-dds-7.7.0 urdfdom_headers"
+  --skip-keys "fastcdr rti-connext-dds-7.7.0 urdfdom_headers python3-vcstool"
 ```
 
 最後に`All required rosdeps installed successfully`と表示されれば成功。Debian Tier 3では
 未解決キーが見つかる可能性があるため、エラーが出た場合はキーをむやみにスキップせず、
 その出力を確認してから対応する。
+
+Debian 13では`python3-vcstool`というパッケージ名ではなく`vcstool`で提供される。
+Step 0.5で`vcstool`を導入し、`vcs --version`が成功していることを確認したうえで、
+rosdepキー`python3-vcstool`だけをスキップする。
 
 ## Step 1: motor_node
 
