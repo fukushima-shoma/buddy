@@ -21,7 +21,7 @@
 
 ## Current Phase
 
-Phase3準備: 音声で会話する
+Phase4開始: ROS 2で機能を分割する
 
 詳細手順:
 
@@ -30,6 +30,7 @@ Phase3準備: 音声で会話する
 - [docs/phase1.md](docs/phase1.md)
 - [docs/phase2.md](docs/phase2.md)
 - [docs/phase3.md](docs/phase3.md)
+- [docs/phase4.md](docs/phase4.md)
 
 ## Phase0 Checklist
 

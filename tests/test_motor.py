@@ -74,6 +74,19 @@ class BuddyDriveTest(unittest.TestCase):
         self.assertEqual(self.driver.left_speed, 0.0)
         self.assertEqual(self.driver.right_speed, 0.0)
 
+    def test_wheels_respect_speed_limit_and_calibration(self) -> None:
+        drive = BuddyDrive(
+            self.driver,
+            max_speed=0.5,
+            left_scale=0.8,
+            right_scale=1.0,
+        )
+
+        command = drive.wheels(0.9, -0.9)
+
+        self.assertEqual(command.left, 0.4)
+        self.assertEqual(command.right, -0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

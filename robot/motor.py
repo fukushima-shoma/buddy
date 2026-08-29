@@ -61,6 +61,13 @@ class BuddyDrive:
         value = self._speed(speed)
         return self._apply(-value, value)
 
+    def wheels(self, left: float, right: float) -> MotorCommand:
+        """Set signed wheel speeds while respecting the configured speed limit."""
+        return self._apply(
+            _clamp(left, -self.max_speed, self.max_speed),
+            _clamp(right, -self.max_speed, self.max_speed),
+        )
+
     def stop(self) -> MotorCommand:
         self.driver.stop()
         return MotorCommand(0.0, 0.0)
