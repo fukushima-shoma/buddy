@@ -78,6 +78,33 @@ vcs --version
 
 この確認後に、ROS 2 Lyrical本体の取得、依存関係導入、ソースビルドへ進む。
 
+## Step 0.6: ROS 2 Lyricalのソースを取得する
+
+Debianパッケージが用意したrosdep設定を更新する。
+
+```sh
+rosdep update
+```
+
+Lyricalの公式リポジトリ一覧からソースを取得する。
+
+```sh
+mkdir -p ~/ros2_lyrical/src
+cd ~/ros2_lyrical
+vcs import --input \
+  https://raw.githubusercontent.com/ros2/ros2/lyrical/ros2.repos \
+  src
+```
+
+主要リポジトリが取得できたことを確認する。
+
+```sh
+test -d ~/ros2_lyrical/src/ros2/rclpy && echo "rclpy=ok"
+test -d ~/ros2_lyrical/src/ros2/common_interfaces && echo "interfaces=ok"
+```
+
+両方が`ok`なら、次は`rosdep install`でシステム依存関係を導入する。
+
 ## Step 1: motor_node
 
 最初のノードは`buddy_robot`パッケージの`motor_node`。ROS 2標準の
@@ -147,7 +174,8 @@ sudo systemctl stop buddy-conversation.service
 - [x] `/cmd_vel`から左右モーター出力への変換を実装
 - [x] ROS 2なしで速度変換を単体テスト
 - [x] Raspberry PiのOSとアーキテクチャを確認
-- [ ] ROS 2 Lyricalのビルドツールを導入
+- [x] ROS 2 Lyricalのビルドツールを導入
+- [ ] ROS 2 Lyricalのソースを取得
 - [ ] ROS 2を導入
 - [ ] `motor_node`をモックで起動
 - [ ] 車輪を浮かせて`motor_node`を実機確認
