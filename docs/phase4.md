@@ -142,6 +142,51 @@ swapon --show
 Buddyサービスを動かせるが、カメラ・音声処理とコンパイルが競合するため、ビルド開始前に
 一時停止する。
 
+確認した実機は4コア、RAM 4GB、zram 2GB。全パッケージの4並列ビルドは避け、Buddyの
+最初のノードに必要なパッケージだけを、パッケージ単位では直列、CMakeでは最大2ジョブで
+ビルドする。
+
+## Step 0.9: ROS 2の最小構成をビルドする
+
+SSH切断後もビルドを継続できるように`tmux`を導入し、既存のBuddyサービスを一時停止する。
+
+```sh
+sudo apt install -y tmux
+sudo systemctl stop buddy-conversation.service
+tmux new -s rosbuild
+```
+
+開いたtmux内で次を実行する。
+
+```sh
+cd ~/ros2_lyrical
+export MAKEFLAGS=-j2
+export CMAKE_BUILD_PARALLEL_LEVEL=2
+colcon build \
+  --symlink-install \
+  --executor sequential \
+  --packages-up-to \
+    rclpy \
+    geometry_msgs \
+    ros2run \
+    ros2topic \
+    rmw_fastrtps_cpp \
+  --cmake-args \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF
+```
+
+`Ctrl+B`に続けて`D`を押すと、ビルドを止めずにtmuxから離れられる。再接続する場合は
+次を実行する。
+
+```sh
+tmux attach -t rosbuild
+```
+
+最後に`Summary: N packages finished`と表示され、failedがなければビルド成功。失敗した
+場合は、再実行やファイル削除を行う前に、最初の`Failed <<< パッケージ名`とその直前の
+エラーを確認する。
+
 ## Step 1: motor_node
 
 最初のノードは`buddy_robot`パッケージの`motor_node`。ROS 2標準の
@@ -214,7 +259,8 @@ sudo systemctl stop buddy-conversation.service
 - [x] ROS 2 Lyricalのビルドツールを導入
 - [x] ROS 2 Lyricalのソースを取得
 - [x] ROS 2のシステム依存関係を導入
-- [ ] CPU・メモリ・スワップを確認
+- [x] CPU・メモリ・スワップを確認
+- [ ] ROS 2 Lyricalの最小構成をビルド
 - [ ] ROS 2を導入
 - [ ] `motor_node`をモックで起動
 - [ ] 車輪を浮かせて`motor_node`を実機確認
