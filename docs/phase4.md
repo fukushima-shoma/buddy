@@ -128,6 +128,20 @@ Debian 13では`python3-vcstool`というパッケージ名ではなく`vcstool`
 Step 0.5で`vcstool`を導入し、`vcs --version`が成功していることを確認したうえで、
 rosdepキー`python3-vcstool`だけをスキップする。
 
+## Step 0.8: ビルド前にCPUとメモリを確認する
+
+Raspberry Piでのソースビルドは負荷が高いため、並列数を決める前に次を確認する。
+
+```sh
+nproc
+free -h
+swapon --show
+```
+
+メモリとスワップの合計に合わせて`colcon build`の並列数を決める。ビルド中も既存の
+Buddyサービスを動かせるが、カメラ・音声処理とコンパイルが競合するため、ビルド開始前に
+一時停止する。
+
 ## Step 1: motor_node
 
 最初のノードは`buddy_robot`パッケージの`motor_node`。ROS 2標準の
@@ -199,7 +213,8 @@ sudo systemctl stop buddy-conversation.service
 - [x] Raspberry PiのOSとアーキテクチャを確認
 - [x] ROS 2 Lyricalのビルドツールを導入
 - [x] ROS 2 Lyricalのソースを取得
-- [ ] ROS 2のシステム依存関係を導入
+- [x] ROS 2のシステム依存関係を導入
+- [ ] CPU・メモリ・スワップを確認
 - [ ] ROS 2を導入
 - [ ] `motor_node`をモックで起動
 - [ ] 車輪を浮かせて`motor_node`を実機確認
