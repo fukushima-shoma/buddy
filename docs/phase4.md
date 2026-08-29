@@ -105,6 +105,25 @@ test -d ~/ros2_lyrical/src/ros2/common_interfaces && echo "interfaces=ok"
 
 両方が`ok`なら、次は`rosdep install`でシステム依存関係を導入する。
 
+## Step 0.7: ROS 2のシステム依存関係を導入する
+
+取得済みのソースを除外し、Debian側で必要なライブラリを導入する。Connext DDSは
+今回使用せず、ソースツリー内で解決する依存項目とともにスキップする。
+
+```sh
+cd ~/ros2_lyrical
+rosdep install \
+  --from-paths src \
+  --ignore-src \
+  --rosdistro lyrical \
+  -y \
+  --skip-keys "fastcdr rti-connext-dds-7.7.0 urdfdom_headers"
+```
+
+最後に`All required rosdeps installed successfully`と表示されれば成功。Debian Tier 3では
+未解決キーが見つかる可能性があるため、エラーが出た場合はキーをむやみにスキップせず、
+その出力を確認してから対応する。
+
 ## Step 1: motor_node
 
 最初のノードは`buddy_robot`パッケージの`motor_node`。ROS 2標準の
@@ -175,7 +194,8 @@ sudo systemctl stop buddy-conversation.service
 - [x] ROS 2なしで速度変換を単体テスト
 - [x] Raspberry PiのOSとアーキテクチャを確認
 - [x] ROS 2 Lyricalのビルドツールを導入
-- [ ] ROS 2 Lyricalのソースを取得
+- [x] ROS 2 Lyricalのソースを取得
+- [ ] ROS 2のシステム依存関係を導入
 - [ ] ROS 2を導入
 - [ ] `motor_node`をモックで起動
 - [ ] 車輪を浮かせて`motor_node`を実機確認
