@@ -358,6 +358,42 @@ ros2 run buddy_robot distance_node --ros-args \
   -p timing_budget_ms:=100
 ```
 
+## Step 3: person_node
+
+`person_node`はカメラと人物検出器だけを所有し、安定化した人物位置を
+`/person/target`へ配信する。モーターや距離センサーには触れない。カスタムROSメッセージを
+別パッケージ化するまでは、検出の全フィールドを1件のJSONにして`std_msgs/msg/String`で送る。
+
+Buddyオーバーレイを再ビルドし、まずカメラを使わないモックで起動する。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+cd ~/buddy_ros2_ws
+colcon build --symlink-install --packages-select buddy_robot
+source install/setup.bash
+
+ros2 run buddy_robot person_node --ros-args \
+  -p backend:=mock \
+  -p mock_position:=right
+```
+
+別ターミナルでメッセージを1回受信する。`detected`が`true`、`position`が`right`なら
+通信とターゲット変換は成功。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+ros2 topic echo --once /person/target std_msgs/msg/String --field data
+```
+
+モック確認後に、現行CLIで実績のあるMediaPipeモデルへ切り替える。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+ros2 run buddy_robot person_node --ros-args \
+  -p backend:=mediapipe \
+  -p fps:=5.0
+```
+
 ## Phase4 Checklist
 
 - [x] ROS 2パッケージの骨格を作成
@@ -373,7 +409,7 @@ ros2 run buddy_robot distance_node --ros-args \
 - [x] `motor_node`をモックで起動
 - [x] 車輪を浮かせて`motor_node`を実機確認
 - [x] `distance_node`を追加
-- [ ] `person_node`を追加
+- [x] `person_node`を追加
 - [ ] `follow_node`を追加
 - [ ] 会話・安全監視をROS 2へ接続
 

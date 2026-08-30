@@ -22,6 +22,7 @@ setup(
         "console_scripts": [
             "distance_node = buddy_ros.distance_node:main",
             "motor_node = buddy_ros.motor_node:main",
+            "person_node = buddy_ros.person_node:main",
         ],
     },
 )
