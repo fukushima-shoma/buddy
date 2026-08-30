@@ -149,12 +149,16 @@ Buddyサービスを動かせるが、カメラ・音声処理とコンパイル
 ## Step 0.9: ROS 2の最小構成をビルドする
 
 SSH切断後もビルドを継続できるように`tmux`を導入し、既存のBuddyサービスを一時停止する。
+この構成ではFast DDSを使う。専用SDKが必要なConnext DDS関連をcolconの探索から除外しておく。
 
 ```sh
 sudo apt install -y tmux
 sudo systemctl stop buddy-conversation.service
+touch ~/ros2_lyrical/src/ros2/rmw_connextdds/COLCON_IGNORE
 tmux new -s rosbuild
 ```
+
+`colcon list | grep -i connext`が何も表示しなければ除外できている。
 
 開いたtmux内で次を実行する。
 
@@ -223,6 +227,13 @@ tail -f ~/ros2_lyrical/rosbuild-resume.log
 
 `tail -f`だけを終了する場合は`Ctrl+C`を押す。colcon本体は停止しない。再起動や電源断を
 行うと`nohup`でも停止するため、ビルド完了までRaspberry Piの電源を維持する。
+
+### 中断後に0バイトのCMake生成ファイルが残った場合
+
+中断されたパッケージの`install/<package>`に0バイトの`*Export.cmake`が残ると、
+後続パッケージがエクスポート先を読み込めず失敗する。該当パッケージの`build`と
+`install`だけをワークスペース外へ退避し、`--packages-skip-build-finished`付きで再開する。
+退避先を`~/ros2_lyrical`内に作るとcolconがパッケージを重複検出するため、必ず外側に置く。
 
 ## Step 1: motor_node
 
@@ -297,7 +308,7 @@ sudo systemctl stop buddy-conversation.service
 - [x] ROS 2 Lyricalのソースを取得
 - [x] ROS 2のシステム依存関係を導入
 - [x] CPU・メモリ・スワップを確認
-- [ ] ROS 2 Lyricalの最小構成をビルド
+- [x] ROS 2 Lyricalの最小構成をビルド
 - [ ] ROS 2を導入
 - [ ] `motor_node`をモックで起動
 - [ ] 車輪を浮かせて`motor_node`を実機確認
