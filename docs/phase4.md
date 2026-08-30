@@ -259,6 +259,13 @@ colcon build --symlink-install --packages-select buddy_robot
 source install/setup.bash
 ```
 
+初回ビルド後は、ROS 2本体、Buddyオーバーレイ、既存の`.venv`をまとめて読み込める。
+VL53L1Xなど`.venv`内のPythonパッケージも、ROS 2ノードから利用できる。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+```
+
 最初はGPIOを使用しないモックで起動する。
 
 ```sh
@@ -338,8 +345,7 @@ ros2 run buddy_robot distance_node --ros-args \
 通信と単位変換は成功。
 
 ```sh
-source ~/ros2_lyrical/install/local_setup.bash
-source ~/buddy_ros2_ws/install/setup.bash
+source ~/buddy/scripts/source_ros2.sh
 ros2 topic echo --once /distance/front sensor_msgs/msg/Range
 ```
 

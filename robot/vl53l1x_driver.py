@@ -11,7 +11,8 @@ class Vl53l1xDistanceSensor:
         except ImportError as exc:
             raise RuntimeError(
                 "VL53L1X dependencies are required. Activate .venv and run: "
-                "python -m pip install adafruit-circuitpython-vl53l1x"
+                "python -m pip install adafruit-circuitpython-vl53l1x. "
+                "For ROS 2, source ~/buddy/scripts/source_ros2.sh first."
             ) from exc
 
         self._i2c = board.I2C()
