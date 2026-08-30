@@ -499,6 +499,35 @@ ros2 launch buddy_robot buddy_follow.launch.py mock_power_good:=false
 
 追従を有効化しても`follow_node`が`reason=power-low`の停止を維持すれば成功。
 
+## Step 6: 会話からROS 2追従を操作する
+
+会話ループの`--mobility-backend ros2-follow`は、従来の人物追従CLIを別プロセス起動せず、
+ROS 2の`/follow/enable`サービスを呼ぶ。「ねえバディ」で会話開始後、従来と同じ音声指示で
+追従を開始・停止できる。「バイバイ」や音声割り込み停止も同じサービス経由で停止する。
+会話プロセスが予期せず終了した場合も、systemdの`ExecStopPost`が追従無効化を送る。
+
+systemdは2サービスに分ける。`buddy-ros-follow.service`が実カメラ、距離、電源、モーター、
+追従判断を追従無効で待機させ、`buddy-conversation.service`が音声対話と開始・停止指示を担当する。
+手動で起動した`ros2 launch`や旧会話サービスが動いているとカメラ・GPIOが競合するため、
+インストール前に手動launchを`Ctrl+C`で終了する。
+
+```sh
+cd ~/buddy
+bash scripts/install_buddy_service.sh
+```
+
+導入後は両サービスと追従待機状態を確認する。
+
+```sh
+systemctl --no-pager --full status buddy-ros-follow.service
+systemctl --no-pager --full status buddy-conversation.service
+source ~/buddy/scripts/source_ros2.sh
+ros2 topic echo --once /follow/status std_msgs/msg/String --field data
+```
+
+起動直後が`enabled=false`なら安全な待機状態。実車確認は車輪を浮かせ、モーター電池を
+すぐ切れる状態で行う。
+
 ## Phase4 Checklist
 
 - [x] ROS 2パッケージの骨格を作成
@@ -519,7 +548,9 @@ ros2 launch buddy_robot buddy_follow.launch.py mock_power_good:=false
 - [x] 4ノードをモックで結合テスト
 - [x] 実カメラ・実距離センサー・実モーターで人物追従を結合テスト
 - [x] `power_node`を追加し、追従判断にフェイルセーフ接続
-- [ ] 会話からROS 2追従の開始・停止を操作
+- [x] mock低電圧とRaspberry Pi実電源正常時の追従判断を確認
+- [x] 会話からROS 2追従を操作するバックエンドを実装
+- [ ] systemdのROS 2待機と音声開始・停止を実機確認
 
 ## References
 

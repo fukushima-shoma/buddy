@@ -102,6 +102,13 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.power_monitor, "off")
         self.assertFalse(args.child_games)
 
+    def test_ros2_follow_mobility_backend_is_available(self) -> None:
+        args = build_parser().parse_args(
+            ["--mobility-backend", "ros2-follow"]
+        )
+
+        self.assertEqual(args.mobility_backend, "ros2-follow")
+
     def test_two_turns_run_complete_pipeline_and_pause_once(self) -> None:
         with TemporaryDirectory() as directory:
             logs: list[str] = []

@@ -32,7 +32,7 @@ from robot.interaction import (
     create_start_trigger,
     run_interaction_station,
 )
-from robot.mobility import PersonFollowProcessController
+from robot.mobility import PersonFollowProcessController, Ros2FollowController
 from robot.profile_memory import DEFAULT_PROFILE_MEMORY_PATH, ParentManagedMemory
 from robot.power import RaspberryPiPowerMonitor
 from robot.reply_cli import create_reply_generator
@@ -200,7 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--conversation-memory-turns", type=int, default=20)
     parser.add_argument(
         "--mobility-backend",
-        choices=("off", "person-follow"),
+        choices=("off", "person-follow", "ros2-follow"),
         default="off",
         help="Allow exact spoken commands to start and stop person following.",
     )
@@ -635,7 +635,7 @@ def main() -> int:
         interruption_threshold=args.barge_in_threshold,
         stop_word_model=(
             args.wake_word_model
-            if args.mobility_backend == "person-follow"
+            if args.mobility_backend != "off"
             and args.playback_backend == "alsa-interruptible"
             else None
         ),
@@ -674,6 +674,8 @@ def main() -> int:
             working_directory=Path.cwd(),
         )
         if args.mobility_backend == "person-follow"
+        else Ros2FollowController()
+        if args.mobility_backend == "ros2-follow"
         else None
     )
     orient_session: Callable[[], str] | None = None

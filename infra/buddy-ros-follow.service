@@ -1,0 +1,19 @@
+[Unit]
+Description=Buddy ROS 2 person-follow stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shofukus
+Group=shofukus
+WorkingDirectory=/home/shofukus/buddy
+ExecStart=/home/shofukus/buddy/scripts/run_buddy_ros_follow.sh
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=15
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

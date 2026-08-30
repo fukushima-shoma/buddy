@@ -1,7 +1,8 @@
 [Unit]
 Description=Buddy wake-word conversation service
 Wants=network-online.target
-After=network-online.target sound.target
+Wants=buddy-ros-follow.service
+After=network-online.target sound.target buddy-ros-follow.service
 
 [Service]
 Type=simple
@@ -10,7 +11,7 @@ Group=shofukus
 WorkingDirectory=/home/shofukus/buddy
 EnvironmentFile=/home/shofukus/buddy/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
+ExecStart=/home/shofukus/buddy/scripts/run_buddy_conversation_ros2.sh \
   --audio-backend alsa-vad \
   --audio-device plughw:CARD=Plus,DEV=0 \
   --transcription-backend openai \
@@ -21,7 +22,7 @@ ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
   --memory-turns 30 \
   --auto-conversation-memory \
   --conversation-memory-turns 20 \
-  --mobility-backend person-follow \
+  --mobility-backend ros2-follow \
   --mobility-stop-distance 60 \
   --mobility-resume-distance 70 \
   --power-monitor raspberry-pi \
@@ -33,6 +34,7 @@ ExecStart=/home/shofukus/buddy/.venv/bin/python -m robot.conversation_loop_cli \
   --max-silence-turns 2 \
   --start-trigger wakeword \
   --wake-word-model /home/shofukus/buddy/models/wakeword/vosk-model-small-ja-0.22
+ExecStopPost=/home/shofukus/buddy/scripts/stop_buddy_ros_follow.sh
 Restart=on-failure
 RestartSec=5
 KillSignal=SIGINT

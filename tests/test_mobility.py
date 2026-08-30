@@ -4,7 +4,7 @@ from pathlib import Path
 import signal
 import unittest
 
-from robot.mobility import PersonFollowProcessController
+from robot.mobility import PersonFollowProcessController, Ros2FollowController
 
 
 class FakeProcess:
@@ -22,6 +22,19 @@ class FakeProcess:
     def wait(self, timeout: float | None = None) -> int:
         self.running = False
         return 0
+
+
+class FakeFollowClient:
+    def __init__(self) -> None:
+        self.requests: list[bool] = []
+        self.closed = False
+
+    def set_enabled(self, enabled: bool) -> bool:
+        self.requests.append(enabled)
+        return True
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class MobilityTest(unittest.TestCase):
@@ -53,3 +66,18 @@ class MobilityTest(unittest.TestCase):
         self.assertEqual(process.signals, [signal.SIGINT])
         self.assertFalse(controller.active)
         self.assertFalse(controller.stop())
+
+    def test_ros2_follow_controller_calls_enable_service(self) -> None:
+        client = FakeFollowClient()
+        controller = Ros2FollowController(client)
+
+        self.assertTrue(controller.start())
+        self.assertTrue(controller.active)
+        self.assertFalse(controller.start())
+        self.assertTrue(controller.stop())
+        self.assertFalse(controller.active)
+        self.assertFalse(controller.stop())
+        self.assertEqual(client.requests, [True, False])
+
+        controller.close()
+        self.assertTrue(client.closed)
