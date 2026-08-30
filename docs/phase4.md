@@ -394,6 +394,55 @@ ros2 run buddy_robot person_node --ros-args \
   -p fps:=5.0
 ```
 
+## Step 4: follow_node
+
+`follow_node`は`/person/target`と`/distance/front`を組み合わせ、判断結果を`/cmd_vel`へ
+配信する。GPIOには触れず、既定では追従無効。`/follow/enable`サービスで明示的に
+開始する。人物入力が古い場合は停止し、距離入力がない場合は前進せず左右のその場旋回だけを
+許可する。
+
+実機モーターに触れない統合確認では、4つのノードを別ターミナルで起動する。
+
+```sh
+# terminal 1
+source ~/buddy/scripts/source_ros2.sh
+ros2 run buddy_robot motor_node --ros-args -p backend:=mock
+```
+
+```sh
+# terminal 2
+source ~/buddy/scripts/source_ros2.sh
+ros2 run buddy_robot distance_node --ros-args \
+  -p backend:=mock -p mock_distance_cm:=200.0
+```
+
+```sh
+# terminal 3
+source ~/buddy/scripts/source_ros2.sh
+ros2 run buddy_robot person_node --ros-args \
+  -p backend:=mock -p mock_position:=center
+```
+
+```sh
+# terminal 4
+source ~/buddy/scripts/source_ros2.sh
+ros2 run buddy_robot follow_node
+```
+
+最後のターミナルから追従を開始する。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+ros2 service call /follow/enable std_srvs/srv/SetBool "{data: true}"
+```
+
+`motor_node`に`cmd_vel left=0.35 right=0.35`が出れば、人物・距離・判断・モーター変換の
+経路が接続できている。終了時は無効化を先に送る。
+
+```sh
+ros2 service call /follow/enable std_srvs/srv/SetBool "{data: false}"
+```
+
 ## Phase4 Checklist
 
 - [x] ROS 2パッケージの骨格を作成
@@ -410,7 +459,7 @@ ros2 run buddy_robot person_node --ros-args \
 - [x] 車輪を浮かせて`motor_node`を実機確認
 - [x] `distance_node`を追加
 - [x] `person_node`を追加
-- [ ] `follow_node`を追加
+- [x] `follow_node`を追加
 - [ ] 会話・安全監視をROS 2へ接続
 
 ## References

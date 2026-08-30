@@ -24,6 +24,29 @@ class PersonTarget:
     def to_json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"), sort_keys=True)
 
+    @classmethod
+    def from_json(cls, payload: str) -> "PersonTarget":
+        values = json.loads(payload)
+        if not isinstance(values, dict):
+            raise ValueError("Person target must be a JSON object.")
+        try:
+            return cls(
+                status=str(values["status"]),
+                detected=bool(values["detected"]),
+                position=str(values["position"]),
+                confidence=float(values["confidence"]),
+                center_x=int(values["center_x"]),
+                center_y=int(values["center_y"]),
+                x=int(values["x"]),
+                y=int(values["y"]),
+                width=int(values["width"]),
+                height=int(values["height"]),
+                image_width=max(1, int(values["image_width"])),
+                image_height=max(1, int(values["image_height"])),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("Invalid person target payload.") from exc
+
 
 def person_target_from_detection(
     detection: PersonDetection | None,

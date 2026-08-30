@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from buddy_ros.person_control import person_target_from_detection
+from buddy_ros.person_control import PersonTarget, person_target_from_detection
 from buddy_ros.person_node import create_detector
 from robot.person_detection import PersonDetection
 
@@ -34,6 +34,9 @@ class RosPersonControlTest(unittest.TestCase):
         self.assertEqual(payload["width"], 200)
         self.assertEqual(payload["image_width"], 640)
 
+        restored = PersonTarget.from_json(target.to_json())
+        self.assertEqual(restored, target)
+
     def test_missing_detection_has_explicit_not_found_state(self) -> None:
         target = person_target_from_detection(
             None,
@@ -58,6 +61,10 @@ class RosPersonControlTest(unittest.TestCase):
     def test_unknown_detector_backend_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             create_detector("unknown")
+
+    def test_invalid_target_payload_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            PersonTarget.from_json('{"detected":true}')
 
 
 if __name__ == "__main__":
