@@ -187,6 +187,43 @@ tmux attach -t rosbuild
 場合は、再実行やファイル削除を行う前に、最初の`Failed <<< パッケージ名`とその直前の
 エラーを確認する。
 
+### エラーなしでビルドが中断した場合
+
+プロセスが存在せず、ログ末尾が通常のCMakeコマンドで突然終わっている場合は、完了済みの
+パッケージを残したまま再開する。`nohup`を使い、SSH切断後も処理を継続する。
+
+```sh
+cd ~/ros2_lyrical
+nohup env \
+  MAKEFLAGS=-j2 \
+  CMAKE_BUILD_PARALLEL_LEVEL=2 \
+  colcon build \
+    --symlink-install \
+    --executor sequential \
+    --packages-skip-build-finished \
+    --packages-up-to \
+      rclpy \
+      geometry_msgs \
+      ros2run \
+      ros2topic \
+      rmw_fastrtps_cpp \
+    --cmake-args \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF \
+  > ~/ros2_lyrical/rosbuild-resume.log 2>&1 &
+echo $!
+```
+
+進行状況は次で確認する。
+
+```sh
+pgrep -af colcon
+tail -f ~/ros2_lyrical/rosbuild-resume.log
+```
+
+`tail -f`だけを終了する場合は`Ctrl+C`を押す。colcon本体は停止しない。再起動や電源断を
+行うと`nohup`でも停止するため、ビルド完了までRaspberry Piの電源を維持する。
+
 ## Step 1: motor_node
 
 最初のノードは`buddy_robot`パッケージの`motor_node`。ROS 2標準の
