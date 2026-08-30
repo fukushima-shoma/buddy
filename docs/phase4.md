@@ -298,6 +298,60 @@ ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
 sudo systemctl stop buddy-conversation.service
 ```
 
+## Step 2: distance_node
+
+`distance_node`は既存の`DistanceSensor`層を再利用し、前方距離をROS 2標準の
+`sensor_msgs/msg/Range`で`/distance/front`へ配信する。既存ドライバーのcmをROS標準のmへ
+変換する。先にROS 2本体の`sensor_msgs`を追加ビルドする。
+
+```sh
+source ~/ros2_lyrical/install/local_setup.bash
+cd ~/ros2_lyrical
+colcon build \
+  --symlink-install \
+  --executor sequential \
+  --packages-skip-build-finished \
+  --packages-up-to sensor_msgs \
+  --cmake-args \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF
+```
+
+Buddy側のオーバーレイを再ビルドする。
+
+```sh
+source ~/ros2_lyrical/install/local_setup.bash
+cd ~/buddy_ros2_ws
+colcon build --symlink-install --packages-select buddy_robot
+source install/setup.bash
+```
+
+まずはI2Cを使わないモックで起動する。
+
+```sh
+ros2 run buddy_robot distance_node --ros-args \
+  -p backend:=mock \
+  -p mock_distance_cm:=123.4
+```
+
+別ターミナルでトピックを1回受信する。`range: 1.234`前後が表示されれば、
+通信と単位変換は成功。
+
+```sh
+source ~/ros2_lyrical/install/local_setup.bash
+source ~/buddy_ros2_ws/install/setup.bash
+ros2 topic echo --once /distance/front sensor_msgs/msg/Range
+```
+
+モック確認後にVL53L1Xへ切り替える。
+
+```sh
+ros2 run buddy_robot distance_node --ros-args \
+  -p backend:=vl53l1x \
+  -p distance_mode:=2 \
+  -p timing_budget_ms:=100
+```
+
 ## Phase4 Checklist
 
 - [x] ROS 2パッケージの骨格を作成
@@ -309,10 +363,10 @@ sudo systemctl stop buddy-conversation.service
 - [x] ROS 2のシステム依存関係を導入
 - [x] CPU・メモリ・スワップを確認
 - [x] ROS 2 Lyricalの最小構成をビルド
-- [ ] ROS 2を導入
-- [ ] `motor_node`をモックで起動
-- [ ] 車輪を浮かせて`motor_node`を実機確認
-- [ ] `distance_node`を追加
+- [x] ROS 2を導入
+- [x] `motor_node`をモックで起動
+- [x] 車輪を浮かせて`motor_node`を実機確認
+- [x] `distance_node`を追加
 - [ ] `person_node`を追加
 - [ ] `follow_node`を追加
 - [ ] 会話・安全監視をROS 2へ接続

@@ -20,6 +20,7 @@ setup(
     license="Proprietary",
     entry_points={
         "console_scripts": [
+            "distance_node = buddy_ros.distance_node:main",
             "motor_node = buddy_ros.motor_node:main",
         ],
     },
