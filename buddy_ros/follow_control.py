@@ -19,12 +19,15 @@ def decide_follow_command(
     *,
     enabled: bool,
     obstacle_latched: bool,
+    safety_stop_reason: str | None = None,
     linear_speed: float = 0.3,
     angular_speed: float = 1.5,
 ) -> FollowCommand:
     """Combine person and range inputs without touching motor hardware."""
     if not enabled:
         return FollowCommand("stop", "disabled")
+    if safety_stop_reason is not None:
+        return FollowCommand("stop", safety_stop_reason)
     if obstacle_latched:
         return FollowCommand("stop", "obstacle")
     if target is None:

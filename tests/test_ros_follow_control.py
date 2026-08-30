@@ -41,6 +41,17 @@ class RosFollowControlTest(unittest.TestCase):
 
         self.assertEqual((command.action, command.reason), ("stop", "obstacle"))
 
+    def test_power_safety_stop_precedes_tracking(self) -> None:
+        command = decide_follow_command(
+            self.make_target(),
+            2.0,
+            enabled=True,
+            obstacle_latched=False,
+            safety_stop_reason="power-low",
+        )
+
+        self.assertEqual((command.action, command.reason), ("stop", "power-low"))
+
     def test_center_target_moves_forward(self) -> None:
         command = decide_follow_command(
             self.make_target(),

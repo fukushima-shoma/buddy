@@ -11,12 +11,13 @@ class RosLaunchTest(unittest.TestCase):
         source = launch_file.read_text(encoding="utf-8")
 
         ast.parse(source)
-        self.assertGreaterEqual(source.count('default_value="mock"'), 3)
-        self.assertIn('parameters=[{"enabled": False}]', source)
+        self.assertGreaterEqual(source.count('default_value="mock"'), 4)
         self.assertIn('executable="motor_node"', source)
         self.assertIn('executable="distance_node"', source)
         self.assertIn('executable="person_node"', source)
+        self.assertIn('executable="power_node"', source)
         self.assertIn('executable="follow_node"', source)
+        self.assertIn('"require_power_status": True', source)
 
 
 if __name__ == "__main__":

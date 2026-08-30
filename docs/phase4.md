@@ -447,10 +447,10 @@ ros2 service call /follow/enable std_srvs/srv/SetBool "{data: true}"
 ros2 service call /follow/enable std_srvs/srv/SetBool "{data: false}"
 ```
 
-## Step 5: 4ノードをlaunchでまとめる
+## Step 5: 走行と電源監視ノードをlaunchでまとめる
 
-`buddy_follow.launch.py`で、motor・distance・person・followの4ノードを1コマンドで起動する。
-既定は全バックエンドがモックで、追従も無効のため車輪は動かない。
+`buddy_follow.launch.py`で、motor・distance・person・follow・powerの5ノードを1コマンドで
+起動する。既定は全バックエンドがモック、電源正常、追従無効のため車輪は動かない。
 
 ROS 2本体に`ros2 launch`コマンドがない場合は追加ビルドする。
 
@@ -483,10 +483,21 @@ ros2 launch buddy_robot buddy_follow.launch.py \
   motor_backend:=gpiozero \
   distance_backend:=vl53l1x \
   person_backend:=mediapipe \
+  power_backend:=raspberry_pi \
   max_speed:=1.0
 ```
 
 起動後も追従は無効。別ターミナルから`/follow/enable`を`true`にして開始する。
+電源が低電圧の間、監視できない間、または電源メッセージが途絶した場合は追従を停止する。
+
+実機前に低電圧停止をモックで確認できる。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+ros2 launch buddy_robot buddy_follow.launch.py mock_power_good:=false
+```
+
+追従を有効化しても`follow_node`が`reason=power-low`の停止を維持すれば成功。
 
 ## Phase4 Checklist
 
@@ -507,7 +518,8 @@ ros2 launch buddy_robot buddy_follow.launch.py \
 - [x] `follow_node`を追加
 - [x] 4ノードをモックで結合テスト
 - [x] 実カメラ・実距離センサー・実モーターで人物追従を結合テスト
-- [ ] 会話・安全監視をROS 2へ接続
+- [x] `power_node`を追加し、追従判断にフェイルセーフ接続
+- [ ] 会話からROS 2追従の開始・停止を操作
 
 ## References
 

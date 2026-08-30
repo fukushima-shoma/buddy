@@ -27,6 +27,7 @@ setup(
             "follow_node = buddy_ros.follow_node:main",
             "motor_node = buddy_ros.motor_node:main",
             "person_node = buddy_ros.person_node:main",
+            "power_node = buddy_ros.power_node:main",
         ],
     },
 )

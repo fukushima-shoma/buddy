@@ -16,7 +16,7 @@ def create_follow_node_class() -> type[Any]:
         from geometry_msgs.msg import Twist
         from rclpy.node import Node
         from sensor_msgs.msg import Range
-        from std_msgs.msg import String
+        from std_msgs.msg import Bool, String
         from std_srvs.srv import SetBool
     except ImportError as exc:
         raise RuntimeError(
@@ -35,6 +35,8 @@ def create_follow_node_class() -> type[Any]:
             self.declare_parameter("resume_confirm_frames", 5)
             self.declare_parameter("linear_speed", 0.3)
             self.declare_parameter("angular_speed", 1.5)
+            self.declare_parameter("require_power_status", False)
+            self.declare_parameter("power_timeout", 2.5)
 
             self.enabled = bool(self.get_parameter("enabled").value)
             self.input_timeout = max(
@@ -48,6 +50,13 @@ def create_follow_node_class() -> type[Any]:
             self.angular_speed = max(
                 0.0,
                 float(self.get_parameter("angular_speed").value),
+            )
+            self.require_power_status = bool(
+                self.get_parameter("require_power_status").value
+            )
+            self.power_timeout = max(
+                0.1,
+                float(self.get_parameter("power_timeout").value),
             )
             update_rate_hz = max(
                 0.1,
@@ -68,6 +77,8 @@ def create_follow_node_class() -> type[Any]:
             self.latest_target_at: float | None = None
             self.latest_distance_m: float | None = None
             self.latest_distance_at: float | None = None
+            self.latest_power_good: bool | None = None
+            self.latest_power_at: float | None = None
             self.last_status = ""
 
             self.command_publisher = self.create_publisher(Twist, "/cmd_vel", 10)
@@ -86,6 +97,12 @@ def create_follow_node_class() -> type[Any]:
                 Range,
                 "/distance/front",
                 self._on_distance,
+                10,
+            )
+            self.power_subscription = self.create_subscription(
+                Bool,
+                "/safety/power_ok",
+                self._on_power,
                 10,
             )
             self.enable_service = self.create_service(
@@ -114,12 +131,18 @@ def create_follow_node_class() -> type[Any]:
             self.latest_distance_m = distance_m
             self.latest_distance_at = time.monotonic()
 
+        def _on_power(self, message: Any) -> None:
+            self.latest_power_good = bool(message.data)
+            self.latest_power_at = time.monotonic()
+
         def _on_enable(self, request: Any, response: Any) -> Any:
             self.enabled = bool(request.data)
             if not self.enabled:
                 self._publish_command(FollowCommand("stop", "disabled"))
             response.success = True
-            response.message = "person following enabled" if self.enabled else "stopped"
+            response.message = (
+                "person following enabled" if self.enabled else "stopped"
+            )
             return response
 
         def _fresh_value(
@@ -150,15 +173,29 @@ def create_follow_node_class() -> type[Any]:
                     None if distance_m is None else distance_m * 100.0
                 ),
             )
+            safety_stop_reason = self._power_stop_reason(now)
             command = decide_follow_command(
                 target,
                 distance_m,
                 enabled=self.enabled,
                 obstacle_latched=obstacle_latched,
+                safety_stop_reason=safety_stop_reason,
                 linear_speed=self.linear_speed,
                 angular_speed=self.angular_speed,
             )
             self._publish_command(command)
+
+        def _power_stop_reason(self, now: float) -> str | None:
+            if not self.require_power_status:
+                return None
+            if (
+                self.latest_power_at is None
+                or now - self.latest_power_at > self.power_timeout
+            ):
+                return "power-not-ready"
+            if self.latest_power_good is not True:
+                return "power-low"
+            return None
 
         def _publish_command(self, command: FollowCommand) -> None:
             message = Twist()
