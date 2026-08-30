@@ -172,6 +172,7 @@ colcon build \
   --packages-up-to \
     rclpy \
     geometry_msgs \
+    ros2launch \
     ros2run \
     ros2service \
     ros2topic \
@@ -209,6 +210,7 @@ nohup env \
     --packages-up-to \
       rclpy \
       geometry_msgs \
+      ros2launch \
       ros2run \
       ros2service \
       ros2topic \
@@ -445,6 +447,47 @@ ros2 service call /follow/enable std_srvs/srv/SetBool "{data: true}"
 ros2 service call /follow/enable std_srvs/srv/SetBool "{data: false}"
 ```
 
+## Step 5: 4ノードをlaunchでまとめる
+
+`buddy_follow.launch.py`で、motor・distance・person・followの4ノードを1コマンドで起動する。
+既定は全バックエンドがモックで、追従も無効のため車輪は動かない。
+
+ROS 2本体に`ros2 launch`コマンドがない場合は追加ビルドする。
+
+```sh
+source ~/ros2_lyrical/install/local_setup.bash
+cd ~/ros2_lyrical
+colcon build \
+  --symlink-install \
+  --executor sequential \
+  --packages-skip-build-finished \
+  --packages-up-to ros2launch \
+  --cmake-args \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF
+```
+
+モック結合は次の1コマンドで起動できる。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+ros2 launch buddy_robot buddy_follow.launch.py
+```
+
+実機では車輪を浮かせ、既存サービスを停止してから、3つのバックエンドを明示する。
+
+```sh
+sudo systemctl stop buddy-conversation.service
+source ~/buddy/scripts/source_ros2.sh
+ros2 launch buddy_robot buddy_follow.launch.py \
+  motor_backend:=gpiozero \
+  distance_backend:=vl53l1x \
+  person_backend:=mediapipe \
+  max_speed:=1.0
+```
+
+起動後も追従は無効。別ターミナルから`/follow/enable`を`true`にして開始する。
+
 ## Phase4 Checklist
 
 - [x] ROS 2パッケージの骨格を作成
@@ -463,6 +506,7 @@ ros2 service call /follow/enable std_srvs/srv/SetBool "{data: false}"
 - [x] `person_node`を追加
 - [x] `follow_node`を追加
 - [x] 4ノードをモックで結合テスト
+- [x] 実カメラ・実距離センサー・実モーターで人物追従を結合テスト
 - [ ] 会話・安全監視をROS 2へ接続
 
 ## References

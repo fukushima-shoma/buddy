@@ -1,0 +1,71 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+
+def generate_launch_description() -> LaunchDescription:
+    motor_backend = LaunchConfiguration("motor_backend")
+    distance_backend = LaunchConfiguration("distance_backend")
+    person_backend = LaunchConfiguration("person_backend")
+    max_speed = LaunchConfiguration("max_speed")
+    mock_distance_cm = LaunchConfiguration("mock_distance_cm")
+    mock_position = LaunchConfiguration("mock_position")
+
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument("motor_backend", default_value="mock"),
+            DeclareLaunchArgument("distance_backend", default_value="mock"),
+            DeclareLaunchArgument("person_backend", default_value="mock"),
+            DeclareLaunchArgument("max_speed", default_value="0.35"),
+            DeclareLaunchArgument("mock_distance_cm", default_value="200.0"),
+            DeclareLaunchArgument("mock_position", default_value="center"),
+            Node(
+                package="buddy_robot",
+                executable="motor_node",
+                name="buddy_motor",
+                output="screen",
+                parameters=[
+                    {
+                        "backend": motor_backend,
+                        "max_speed": ParameterValue(max_speed, value_type=float),
+                    }
+                ],
+            ),
+            Node(
+                package="buddy_robot",
+                executable="distance_node",
+                name="buddy_distance",
+                output="screen",
+                parameters=[
+                    {
+                        "backend": distance_backend,
+                        "mock_distance_cm": ParameterValue(
+                            mock_distance_cm,
+                            value_type=float,
+                        ),
+                    }
+                ],
+            ),
+            Node(
+                package="buddy_robot",
+                executable="person_node",
+                name="buddy_person",
+                output="screen",
+                parameters=[
+                    {
+                        "backend": person_backend,
+                        "mock_position": mock_position,
+                    }
+                ],
+            ),
+            Node(
+                package="buddy_robot",
+                executable="follow_node",
+                name="buddy_follow",
+                output="screen",
+                parameters=[{"enabled": False}],
+            ),
+        ]
+    )
