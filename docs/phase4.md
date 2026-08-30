@@ -173,6 +173,7 @@ colcon build \
     rclpy \
     geometry_msgs \
     ros2run \
+    ros2service \
     ros2topic \
     rmw_fastrtps_cpp \
   --cmake-args \
@@ -209,6 +210,7 @@ nohup env \
       rclpy \
       geometry_msgs \
       ros2run \
+      ros2service \
       ros2topic \
       rmw_fastrtps_cpp \
     --cmake-args \
