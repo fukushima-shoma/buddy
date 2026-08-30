@@ -462,6 +462,7 @@ ros2 service call /follow/enable std_srvs/srv/SetBool "{data: false}"
 - [x] `distance_node`を追加
 - [x] `person_node`を追加
 - [x] `follow_node`を追加
+- [x] 4ノードをモックで結合テスト
 - [ ] 会話・安全監視をROS 2へ接続
 
 ## References
