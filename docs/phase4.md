@@ -554,7 +554,7 @@ ROS 2の`local_setup.bash`は未設定変数を内部で使うため、これを
 - [x] `power_node`を追加し、追従判断にフェイルセーフ接続
 - [x] mock低電圧とRaspberry Pi実電源正常時の追従判断を確認
 - [x] 会話からROS 2追従を操作するバックエンドを実装
-- [ ] systemdのROS 2待機と音声開始・停止を実機確認
+- [x] systemdのROS 2待機と音声開始・停止を実機確認
 
 ## References
 

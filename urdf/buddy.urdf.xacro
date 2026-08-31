@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="buddy">
+  <!-- Approximate defaults. Replace them with measured dimensions in the launch arguments. -->
+  <xacro:arg name="chassis_length" default="0.20"/>
+  <xacro:arg name="chassis_width" default="0.14"/>
+  <xacro:arg name="chassis_height" default="0.06"/>
+  <xacro:arg name="wheel_radius" default="0.033"/>
+  <xacro:arg name="wheel_width" default="0.026"/>
+  <xacro:arg name="wheel_separation" default="0.15"/>
+  <xacro:arg name="camera_x" default="0.085"/>
+  <xacro:arg name="camera_z" default="0.055"/>
+  <xacro:arg name="distance_sensor_x" default="0.105"/>
+  <xacro:arg name="distance_sensor_z" default="0.0"/>
+
+  <xacro:property name="chassis_length" value="$(arg chassis_length)"/>
+  <xacro:property name="chassis_width" value="$(arg chassis_width)"/>
+  <xacro:property name="chassis_height" value="$(arg chassis_height)"/>
+  <xacro:property name="wheel_radius" value="$(arg wheel_radius)"/>
+  <xacro:property name="wheel_width" value="$(arg wheel_width)"/>
+  <xacro:property name="wheel_separation" value="$(arg wheel_separation)"/>
+
+  <material name="buddy_blue">
+    <color rgba="0.12 0.42 0.78 1.0"/>
+  </material>
+  <material name="wheel_black">
+    <color rgba="0.05 0.05 0.05 1.0"/>
+  </material>
+  <material name="sensor_gray">
+    <color rgba="0.25 0.25 0.25 1.0"/>
+  </material>
+
+  <!-- REP-105 ground-level robot origin: x forward, y left, z up. -->
+  <link name="base_footprint"/>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <material name="buddy_blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${chassis_height / 2.0}" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:macro name="wheel" params="side sign">
+    <link name="${side}_wheel_link">
+      <visual>
+        <origin rpy="1.57079632679 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="wheel_black"/>
+      </visual>
+      <collision>
+        <origin rpy="1.57079632679 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+    </link>
+    <!-- Fixed until wheel encoders provide joint positions in the odometry step. -->
+    <joint name="${side}_wheel_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${side}_wheel_link"/>
+      <origin
+        xyz="0 ${sign * wheel_separation / 2.0} ${wheel_radius - chassis_height / 2.0}"
+        rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:wheel side="left" sign="1"/>
+  <xacro:wheel side="right" sign="-1"/>
+
+  <link name="caster_link">
+    <visual>
+      <geometry>
+        <sphere radius="0.012"/>
+      </geometry>
+      <material name="wheel_black"/>
+    </visual>
+  </link>
+  <joint name="caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="caster_link"/>
+    <origin
+      xyz="${-chassis_length * 0.38} 0 ${0.012 - chassis_height / 2.0}"
+      rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.025 0.025 0.012"/>
+      </geometry>
+      <material name="sensor_gray"/>
+    </visual>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="$(arg camera_x) 0 $(arg camera_z)" rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera_optical_frame"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_frame"/>
+    <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+
+  <link name="front_distance_sensor_link">
+    <visual>
+      <geometry>
+        <box size="0.018 0.012 0.006"/>
+      </geometry>
+      <material name="sensor_gray"/>
+    </visual>
+  </link>
+  <joint name="front_distance_sensor_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="front_distance_sensor_link"/>
+    <origin
+      xyz="$(arg distance_sensor_x) 0 $(arg distance_sensor_z)"
+      rpy="0 0 0"/>
+  </joint>
+</robot>

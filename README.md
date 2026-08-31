@@ -21,7 +21,7 @@
 
 ## Current Phase
 
-Phase4開始: ROS 2で機能を分割する
+Phase5開始: URDFとTFを土台に自律走行へ進む
 
 詳細手順:
 
@@ -31,6 +31,7 @@ Phase4開始: ROS 2で機能を分割する
 - [docs/phase2.md](docs/phase2.md)
 - [docs/phase3.md](docs/phase3.md)
 - [docs/phase4.md](docs/phase4.md)
+- [docs/phase5.md](docs/phase5.md)
 
 ## Phase0 Checklist
 

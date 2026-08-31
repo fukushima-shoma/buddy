@@ -14,6 +14,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE_NAME}"]),
         (f"share/{PACKAGE_NAME}", ["package.xml"]),
         (f"share/{PACKAGE_NAME}/launch", glob("launch/*.launch.py")),
+        (f"share/{PACKAGE_NAME}/urdf", glob("urdf/*.urdf.xacro")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

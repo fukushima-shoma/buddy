@@ -44,7 +44,7 @@ def create_distance_node_class() -> type[Any]:
             self.declare_parameter("distance_mode", 2)
             self.declare_parameter("timing_budget_ms", 100)
             self.declare_parameter("publish_rate_hz", 10.0)
-            self.declare_parameter("frame_id", "front_distance_sensor")
+            self.declare_parameter("frame_id", "front_distance_sensor_link")
             self.declare_parameter("field_of_view", 0.47)
             self.declare_parameter("min_range_m", 0.04)
             self.declare_parameter("max_range_m", 4.0)
