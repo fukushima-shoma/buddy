@@ -239,6 +239,23 @@ class InteractionTest(unittest.TestCase):
         self.assertEqual(completed, 1)
         self.assertTrue(trigger.closed)
 
+    def test_station_delays_rearming_after_a_completed_session(self) -> None:
+        trigger = SequenceTrigger([True, False])
+        delays: list[float] = []
+        logs: list[str] = []
+
+        completed = run_interaction_station(
+            trigger=trigger,
+            run_session=lambda: 1,
+            rearm_delay=1.5,
+            output=logs.append,
+            sleeper=delays.append,
+        )
+
+        self.assertEqual(completed, 1)
+        self.assertEqual(delays, [1.5])
+        self.assertIn("state=cooldown duration=1.5s", logs)
+
     def test_negative_session_limit_is_rejected(self) -> None:
         trigger = SequenceTrigger([])
 

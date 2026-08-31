@@ -5,11 +5,13 @@ from enum import Enum
 import json
 from pathlib import Path
 import subprocess
+import time
 from typing import Any, Protocol
 
 
 DEFAULT_CONVERSATION_BUTTON_PIN = 17
 DEFAULT_WAKE_PHRASE = "ねえ バディ"
+DEFAULT_WAKE_WORD_REARM_DELAY = 1.5
 
 
 class InteractionState(str, Enum):
@@ -229,12 +231,16 @@ def run_interaction_station(
     trigger: StartTrigger,
     run_session: Callable[[], int],
     sessions: int = 0,
+    rearm_delay: float = 0.0,
     reset_session: Callable[[], None] | None = None,
     output: Callable[[str], None] = print,
+    sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
     """Run triggered conversation sessions; zero sessions means no fixed limit."""
     if sessions < 0:
         raise ValueError("sessions must be 0 or greater")
+    if rearm_delay < 0:
+        raise ValueError("rearm delay must be 0 or greater")
 
     completed_sessions = 0
     try:
@@ -257,6 +263,10 @@ def run_interaction_station(
                 f"state={InteractionState.WAITING.value} session={session} "
                 f"completed-turns={completed_turns}"
             )
+            more_sessions = sessions == 0 or completed_sessions < sessions
+            if more_sessions and rearm_delay > 0:
+                output(f"state=cooldown duration={rearm_delay:.1f}s")
+                sleeper(rearm_delay)
     except KeyboardInterrupt:
         output("Stopping interaction station.")
     finally:

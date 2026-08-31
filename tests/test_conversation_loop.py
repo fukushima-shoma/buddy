@@ -97,6 +97,7 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertIsNone(args.wake_word_model)
         self.assertEqual(args.wake_phrase, "ねえ バディ")
         self.assertIsNone(args.wake_word_device)
+        self.assertEqual(args.wake_word_rearm_delay, 1.5)
         self.assertEqual(args.orientation_backend, "off")
         self.assertEqual(args.mobility_backend, "off")
         self.assertEqual(args.power_monitor, "off")

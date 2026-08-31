@@ -29,6 +29,7 @@ from robot.conversation_memory import (
 from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
     DEFAULT_WAKE_PHRASE,
+    DEFAULT_WAKE_WORD_REARM_DELAY,
     create_start_trigger,
     run_interaction_station,
 )
@@ -288,6 +289,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--wake-word-device",
         help="ALSA capture device; defaults to --audio-device.",
+    )
+    parser.add_argument(
+        "--wake-word-rearm-delay",
+        type=float,
+        default=DEFAULT_WAKE_WORD_REARM_DELAY,
+        help=(
+            "Seconds to ignore playback echo after a wake-word session "
+            f"(default: {DEFAULT_WAKE_WORD_REARM_DELAY})."
+        ),
     )
     parser.add_argument(
         "--orientation-backend",
@@ -796,6 +806,11 @@ def main() -> int:
             trigger=trigger,
             run_session=lambda: run_session(catch_interrupt=False),
             sessions=args.sessions,
+            rearm_delay=(
+                args.wake_word_rearm_delay
+                if args.start_trigger == "wakeword"
+                else 0.0
+            ),
             reset_session=prepare_session,
         )
     finally:
