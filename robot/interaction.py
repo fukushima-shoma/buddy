@@ -134,7 +134,11 @@ class VoskWakeWordTrigger:
                 ) from exc
             vosk.SetLogLevel(-1)
             self._model = vosk.Model(str(model_path))
-            grammar = json.dumps([phrase, "[unk]"], ensure_ascii=False)
+            phrase_words = tuple(phrase.split())
+            grammar_phrases = list(
+                dict.fromkeys((phrase, *phrase_words, "[unk]"))
+            )
+            grammar = json.dumps(grammar_phrases, ensure_ascii=False)
             recognizer = vosk.KaldiRecognizer(
                 self._model,
                 sample_rate,
@@ -180,11 +184,9 @@ class VoskWakeWordTrigger:
                 if len(chunk) != self._chunk_bytes:
                     raise RuntimeError("arecord stopped while waiting for wake word")
                 completed = self._recognizer.AcceptWaveform(chunk)
-                payload = (
-                    self._recognizer.Result()
-                    if completed
-                    else self._recognizer.PartialResult()
-                )
+                if not completed:
+                    continue
+                payload = self._recognizer.Result()
                 if wake_phrase_detected(payload, self._targets):
                     return True
         finally:

@@ -56,14 +56,13 @@ class FakeWakeWordRecognizer:
         if len(chunk) != 3200:
             raise AssertionError("unexpected audio frame size")
         self.calls += 1
-        return False
+        return self.calls == 2
 
     def PartialResult(self) -> str:
-        text = "ねえ バディ" if self.calls == 2 else "ねえ"
-        return f'{{"partial": "{text}"}}'
+        return '{"partial": "ねえ バディ"}'
 
     def Result(self) -> str:
-        return '{"text": ""}'
+        return '{"text": "ねえ バディ"}'
 
 
 class FakeAudioProcess:
@@ -144,6 +143,19 @@ class InteractionTest(unittest.TestCase):
             ["arecord", "--quiet", "-D", "plughw:2,0"],
         )
         self.assertIn("16000", commands[0])
+
+    def test_wake_word_does_not_accept_a_partial_result(self) -> None:
+        recognizer = FakeWakeWordRecognizer()
+        frame = bytes(3200)
+        process = FakeAudioProcess([frame, frame])
+        trigger = VoskWakeWordTrigger(
+            recognizer=recognizer,
+            process_factory=lambda *args, **kwargs: process,
+        )
+
+        self.assertTrue(trigger.wait())
+
+        self.assertEqual(recognizer.calls, 2)
 
     def test_wake_word_resets_recognizer_before_every_wait(self) -> None:
         recognizer = FakeWakeWordRecognizer()
