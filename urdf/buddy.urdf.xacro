@@ -1,16 +1,18 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="buddy">
-  <!-- Approximate defaults. Replace them with measured dimensions in the launch arguments. -->
-  <xacro:arg name="chassis_length" default="0.20"/>
-  <xacro:arg name="chassis_width" default="0.14"/>
+  <!-- Measured dimensions use the wheel axle midpoint as the base_link origin. -->
+  <xacro:arg name="chassis_length" default="0.22"/>
+  <xacro:arg name="chassis_width" default="0.10"/>
   <xacro:arg name="chassis_height" default="0.06"/>
-  <xacro:arg name="wheel_radius" default="0.033"/>
-  <xacro:arg name="wheel_width" default="0.026"/>
-  <xacro:arg name="wheel_separation" default="0.15"/>
-  <xacro:arg name="camera_x" default="0.085"/>
-  <xacro:arg name="camera_z" default="0.055"/>
-  <xacro:arg name="distance_sensor_x" default="0.105"/>
-  <xacro:arg name="distance_sensor_z" default="0.0"/>
+  <xacro:arg name="chassis_x" default="-0.03"/>
+  <xacro:arg name="wheel_radius" default="0.035"/>
+  <xacro:arg name="wheel_width" default="0.03"/>
+  <xacro:arg name="wheel_separation" default="0.10"/>
+  <xacro:arg name="camera_x" default="0.08"/>
+  <xacro:arg name="camera_z" default="0.105"/>
+  <xacro:arg name="distance_sensor_x" default="0.08"/>
+  <xacro:arg name="distance_sensor_z" default="0.015"/>
+  <xacro:arg name="caster_x" default="-0.12"/>
 
   <xacro:property name="chassis_length" value="$(arg chassis_length)"/>
   <xacro:property name="chassis_width" value="$(arg chassis_width)"/>
@@ -34,12 +36,14 @@
 
   <link name="base_link">
     <visual>
+      <origin xyz="$(arg chassis_x) 0 0" rpy="0 0 0"/>
       <geometry>
         <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
       </geometry>
       <material name="buddy_blue"/>
     </visual>
     <collision>
+      <origin xyz="$(arg chassis_x) 0 0" rpy="0 0 0"/>
       <geometry>
         <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
       </geometry>
@@ -48,7 +52,7 @@
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 ${chassis_height / 2.0}" rpy="0 0 0"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
   </joint>
 
   <xacro:macro name="wheel" params="side sign">
@@ -72,7 +76,7 @@
       <parent link="base_link"/>
       <child link="${side}_wheel_link"/>
       <origin
-        xyz="0 ${sign * wheel_separation / 2.0} ${wheel_radius - chassis_height / 2.0}"
+        xyz="0 ${sign * wheel_separation / 2.0} 0"
         rpy="0 0 0"/>
     </joint>
   </xacro:macro>
@@ -92,7 +96,7 @@
     <parent link="base_link"/>
     <child link="caster_link"/>
     <origin
-      xyz="${-chassis_length * 0.38} 0 ${0.012 - chassis_height / 2.0}"
+      xyz="$(arg caster_x) 0 ${0.012 - wheel_radius}"
       rpy="0 0 0"/>
   </joint>
 

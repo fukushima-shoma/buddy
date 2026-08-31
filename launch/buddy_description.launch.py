@@ -7,16 +7,18 @@ from launch_ros.substitutions import FindPackageShare
 
 
 DIMENSION_DEFAULTS = {
-    "chassis_length": "0.20",
-    "chassis_width": "0.14",
+    "chassis_length": "0.22",
+    "chassis_width": "0.10",
     "chassis_height": "0.06",
-    "wheel_radius": "0.033",
-    "wheel_width": "0.026",
-    "wheel_separation": "0.15",
-    "camera_x": "0.085",
-    "camera_z": "0.055",
-    "distance_sensor_x": "0.105",
-    "distance_sensor_z": "0.0",
+    "chassis_x": "-0.03",
+    "wheel_radius": "0.035",
+    "wheel_width": "0.03",
+    "wheel_separation": "0.10",
+    "camera_x": "0.08",
+    "camera_z": "0.105",
+    "distance_sensor_x": "0.08",
+    "distance_sensor_z": "0.015",
+    "caster_x": "-0.12",
 }
 
 

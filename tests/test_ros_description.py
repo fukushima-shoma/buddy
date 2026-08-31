@@ -33,6 +33,11 @@ class RosDescriptionTest(unittest.TestCase):
         self.assertIn('FindPackageShare("buddy_robot")', source)
         self.assertIn('package="robot_state_publisher"', source)
         self.assertIn('"robot_description": robot_description', source)
+        self.assertIn('"wheel_radius": "0.035"', source)
+        self.assertIn('"wheel_separation": "0.10"', source)
+        self.assertIn('"camera_z": "0.105"', source)
+        self.assertIn('"distance_sensor_z": "0.015"', source)
+        self.assertIn('"caster_x": "-0.12"', source)
 
     def test_ros_package_installs_urdf_and_declares_dependencies(self) -> None:
         setup_source = (ROOT / "setup.py").read_text(encoding="utf-8")
