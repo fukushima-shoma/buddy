@@ -102,6 +102,10 @@ OpenAI Python SDKを仮想環境へ導入する。
 python -m pip install -r requirements-phase3.txt
 ```
 
+`httpx2/_decoders.py`で`process() takes no keyword arguments`が出る場合は、
+古いBrotliとの互換性問題である。依存ファイルには`Brotli>=1.2.0`を含めているため、
+同じコマンドを再実行して仮想環境を更新する。
+
 APIキーはコードや`.env`へ書かず、シェルの環境変数へ設定する。
 
 ```sh

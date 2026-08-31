@@ -264,6 +264,9 @@ python -m robot.conversation_loop_cli \
 python -m pip install -r requirements-phase3.txt
 ```
 
+`httpx2/_decoders.py`で`process() takes no keyword arguments`が出た場合も、
+このコマンドで`Brotli>=1.2.0`へ更新する。
+
 Voskの軽量日本語モデル（約48MB）を取得して展開する。モデルはGitへ追加しない。
 
 ```sh
