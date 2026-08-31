@@ -81,14 +81,54 @@ ros2 topic echo --once /tf_static
 通信は成功。距離ノードの`Range.header.frame_id`も
 `front_distance_sensor_link`へ統一する。
 
+## Step 2: オープンループ・オドメトリ
+
+実エンコーダーを導入する前に、`odometry_node`が`/cmd_vel`を積分して仮の自己位置を
+`/odom`へ配信する。あわせて`odom -> base_footprint`の動的TFを配信する。
+
+この値は指令速度だけから計算するため、タイヤの滑り、モーター差、キャスターの向き、
+衝突による停止を検出できない。ROS 2通信を確認するための暫定値であり、SLAMや実際の
+自律走行ではエンコーダーとIMUを使う実測オドメトリへ置き換える。
+
+Buddyパッケージを再ビルドした後、モーター電池をOFFにして起動する。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+ros2 launch buddy_robot buddy_odometry.launch.py
+```
+
+別ターミナルから2秒間、前進速度だけを送る。このlaunchには`motor_node`が含まれないため、
+車輪は動かない。
+
+```sh
+source ~/buddy/scripts/source_ros2.sh
+timeout 2 ros2 topic pub --rate 10 \
+  /cmd_vel \
+  geometry_msgs/msg/Twist \
+  "{linear: {x: 0.1}, angular: {z: 0.0}}"
+```
+
+自己位置とTFを確認する。
+
+```sh
+ros2 topic echo --once /odom nav_msgs/msg/Odometry
+ros2 topic echo --once /tf tf2_msgs/msg/TFMessage
+```
+
+`/odom`の`pose.pose.position.x`が約0.2 mになり、`odom`から`base_footprint`へのTFが
+出れば成功。指令が0.5秒途絶えると積分を停止する。原点へ戻す場合は次を実行する。
+
+```sh
+ros2 service call /odom/reset std_srvs/srv/Empty "{}"
+```
+
 ## 次のStep
 
-1. 実測寸法をURDFへ反映する
-2. エンコーダーとIMUの構成を決める
-3. `/joint_states`、`/odom`、`odom -> base_footprint`を実装する
-4. 2D LiDARを追加する
-5. SLAMで地図を作成する
-6. Nav2で自律移動する
+1. エンコーダーとIMUの構成を決める
+2. `/joint_states`と実測オドメトリを実装する
+3. 2D LiDARを追加する
+4. SLAMで地図を作成する
+5. Nav2で自律移動する
 
 ## Phase5 Checklist
 
@@ -98,8 +138,10 @@ ros2 topic echo --once /tf_static
 - [x] `robot_state_publisher`をRaspberry Piへ導入
 - [x] `/tf_static`を実機で確認
 - [x] 車体寸法を実測して反映（車体幅・高さを除く）
+- [x] `/cmd_vel`を使うオープンループ`/odom`を実装
+- [ ] オープンループ`/odom`と動的TFを実機で確認
 - [ ] オドメトリ用ハードウェアを決定
-- [ ] `/odom`を実装
+- [ ] エンコーダーとIMUを使う実測`/odom`を実装
 - [ ] 2D LiDARを接続
 - [ ] SLAMで地図を保存
 - [ ] Nav2で自律移動

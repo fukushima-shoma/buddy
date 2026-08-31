@@ -27,6 +27,7 @@ setup(
             "distance_node = buddy_ros.distance_node:main",
             "follow_node = buddy_ros.follow_node:main",
             "motor_node = buddy_ros.motor_node:main",
+            "odometry_node = buddy_ros.odometry_node:main",
             "person_node = buddy_ros.person_node:main",
             "power_node = buddy_ros.power_node:main",
         ],
