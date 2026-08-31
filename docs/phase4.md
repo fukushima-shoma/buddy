@@ -530,6 +530,7 @@ ros2 topic echo --once /follow/status std_msgs/msg/String --field data
 
 ROS 2の`local_setup.bash`は未設定変数を内部で使うため、これを読むsystemdラッパーで
 `set -u`を有効にしない。`COLCON_CURRENT_PREFIX: unbound variable`が出る場合はラッパーが古い。
+`source_ros2.sh`は呼び出し元シェルの変数を消さないよう、内部変数を`buddy_ros2_env_`で名前空間化する。
 
 ## Phase4 Checklist
 
