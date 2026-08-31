@@ -528,6 +528,9 @@ ros2 topic echo --once /follow/status std_msgs/msg/String --field data
 起動直後が`enabled=false`なら安全な待機状態。実車確認は車輪を浮かせ、モーター電池を
 すぐ切れる状態で行う。
 
+ROS 2の`local_setup.bash`は未設定変数を内部で使うため、これを読むsystemdラッパーで
+`set -u`を有効にしない。`COLCON_CURRENT_PREFIX: unbound variable`が出る場合はラッパーが古い。
+
 ## Phase4 Checklist
 
 - [x] ROS 2パッケージの骨格を作成

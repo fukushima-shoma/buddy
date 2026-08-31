@@ -42,6 +42,16 @@ class SystemdServiceTest(unittest.TestCase):
         self.assertIn("power_backend:=raspberry_pi", runner)
         self.assertNotIn("/follow/enable", runner)
 
+    def test_ros_wrappers_do_not_enable_nounset_before_ros_setup(self) -> None:
+        for name in (
+            "run_buddy_conversation_ros2.sh",
+            "run_buddy_ros_follow.sh",
+            "stop_buddy_ros_follow.sh",
+        ):
+            script = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+            self.assertNotIn("set -u", script)
+            self.assertNotIn("set -euo", script)
+
     def test_installer_checks_private_runtime_files_before_enabling(self) -> None:
         installer = (ROOT / "scripts/install_buddy_service.sh").read_text(
             encoding="utf-8"
