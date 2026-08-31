@@ -139,7 +139,7 @@ ros2 service call /odom/reset std_srvs/srv/Empty "{}"
 - [x] `/tf_static`を実機で確認
 - [x] 車体寸法を実測して反映（車体幅・高さを除く）
 - [x] `/cmd_vel`を使うオープンループ`/odom`を実装
-- [ ] オープンループ`/odom`と動的TFを実機で確認
+- [x] オープンループ`/odom`と動的TFを実機で確認
 - [ ] オドメトリ用ハードウェアを決定
 - [ ] エンコーダーとIMUを使う実測`/odom`を実装
 - [ ] 2D LiDARを接続
