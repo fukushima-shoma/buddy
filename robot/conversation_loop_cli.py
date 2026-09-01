@@ -4,7 +4,6 @@ import argparse
 from pathlib import Path
 import time
 from typing import Callable
-import unicodedata
 from uuid import uuid4
 
 from robot.audio import (
@@ -25,6 +24,23 @@ from robot.conversation_memory import (
     DEFAULT_CONVERSATION_MEMORY_PATH,
     ConversationMemoryStore,
     format_conversation_memory,
+)
+from robot.conversation_intents import (
+    DEFAULT_FAREWELL_REPLY,
+    DEFAULT_INACTIVITY_REPLY,
+    MOBILITY_ALREADY_RUNNING_REPLY,
+    MOBILITY_ALREADY_STOPPED_REPLY,
+    MOBILITY_FAREWELL_REPLY,
+    MOBILITY_START_REPLY,
+    MOBILITY_STOP_REPLY,
+    MOBILITY_UNAVAILABLE_REPLY,
+    POWER_GOOD_REPLY,
+    POWER_LOW_REPLY,
+    POWER_UNAVAILABLE_REPLY,
+    is_farewell_transcript,
+    is_mobility_start_transcript,
+    is_mobility_stop_transcript,
+    is_power_status_transcript,
 )
 from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
@@ -58,72 +74,7 @@ CHILD_RETRY_REPLIES = (
     "ごめんね、よく聞こえなかったよ。もう一度、ゆっくり話してくれる？",
     "うまく聞き取れないみたい。近くの大人と一緒に、もう一度試してね。",
 )
-FAREWELL_PHRASES = frozenset(
-    {
-        "バイバイ",
-        "ばいばい",
-        "じゃあバイバイ",
-        "バイバイまたね",
-        "またね",
-        "さようなら",
-        "さよなら",
-        "おしまい",
-        "お話おしまい",
-    }
-)
-DEFAULT_FAREWELL_REPLY = "バイバイ。またお話ししようね。"
 DEFAULT_MAX_SILENCE_TURNS = 2
-DEFAULT_INACTIVITY_REPLY = "お話はおしまいかな。またお話ししようね。"
-MOBILITY_START_PHRASES = frozenset({"ついてきて", "ついて来て"})
-MOBILITY_STOP_PHRASES = frozenset({"止まって", "とまって", "ストップ"})
-MOBILITY_START_REPLY = "いまから、ついていくね。動き始めるよ。"
-MOBILITY_ALREADY_RUNNING_REPLY = "もう、ついていっているよ。"
-MOBILITY_STOP_REPLY = "止まったよ。もう動かないよ。"
-MOBILITY_ALREADY_STOPPED_REPLY = "いまは止まっているよ。"
-MOBILITY_FAREWELL_REPLY = "止まったよ。バイバイ。またお話ししようね。"
-MOBILITY_UNAVAILABLE_REPLY = "ごめんね、今は動けないよ。"
-POWER_LOW_REPLY = "電源が弱くなっているから、安全のために止まるね。"
-POWER_GOOD_REPLY = "電源は大丈夫だよ。"
-POWER_UNAVAILABLE_REPLY = "電源を確認できないから、安全のために動かないね。"
-POWER_STATUS_PHRASES = frozenset(
-    {"電池大丈夫", "電池は大丈夫", "バッテリー大丈夫", "バッテリーは大丈夫"}
-)
-
-
-def is_farewell_transcript(transcript: str) -> bool:
-    normalized = "".join(
-        character
-        for character in unicodedata.normalize("NFKC", transcript).casefold()
-        if character.isalnum()
-    )
-    return normalized in FAREWELL_PHRASES
-
-
-def is_mobility_start_transcript(transcript: str) -> bool:
-    normalized = "".join(
-        character
-        for character in unicodedata.normalize("NFKC", transcript).casefold()
-        if character.isalnum()
-    )
-    return normalized in MOBILITY_START_PHRASES
-
-
-def is_mobility_stop_transcript(transcript: str) -> bool:
-    normalized = "".join(
-        character
-        for character in unicodedata.normalize("NFKC", transcript).casefold()
-        if character.isalnum()
-    )
-    return normalized in MOBILITY_STOP_PHRASES
-
-
-def is_power_status_transcript(transcript: str) -> bool:
-    normalized = "".join(
-        character
-        for character in unicodedata.normalize("NFKC", transcript).casefold()
-        if character.isalnum()
-    )
-    return normalized in POWER_STATUS_PHRASES
 
 
 def build_parser() -> argparse.ArgumentParser:
