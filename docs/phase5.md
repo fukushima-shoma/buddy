@@ -129,6 +129,19 @@ ros2 service call /odom/reset std_srvs/srv/Empty "{}"
 tick数を確認し、GPIOまたは専用コントローラーから左右の累積tickを渡す入力層を追加する。
 既定値は設けず、実測したタイヤ径、左右タイヤ中心間、tick数を明示的に設定する。
 
+数値センサーイベントだけをJSON Linesへ保存すると、実機を動かさず追従判断と
+エンコーダーオドメトリを再生できる。録音や画像はシナリオへ含めない。
+
+```sh
+python3 -m robot.scenario_cli scenario.jsonl \
+  --wheel-diameter 0.07 \
+  --wheel-separation 0.10 \
+  --ticks-per-revolution 20
+```
+
+イベントの`type`には`enable`、`person`、`distance`、`power`、`encoder`、`sample`を
+指定する。タイヤ径、左右タイヤ中心間、tick数には部品到着後の実測値を使用する。
+
 1. エンコーダーとIMUの構成を決める
 2. `/joint_states`と実測オドメトリを実装する
 3. 2D LiDARを追加する
