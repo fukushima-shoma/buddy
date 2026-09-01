@@ -4,7 +4,10 @@ from pathlib import Path
 import unittest
 
 from buddy_ros.odometry_control import (
+    DifferentialDriveGeometry,
+    EncoderOdometry,
     PlanarPose,
+    integrate_wheel_distances,
     integrate_velocity,
     normalize_angle,
     yaw_quaternion,
@@ -68,6 +71,55 @@ class OdometryControlTest(unittest.TestCase):
 
         self.assertEqual(quaternion[0:2], (0.0, 0.0))
         self.assertTrue(isclose(quaternion[2] ** 2 + quaternion[3] ** 2, 1.0))
+
+    def test_encoder_ticks_integrate_straight_travel(self) -> None:
+        odometry = EncoderOdometry(
+            DifferentialDriveGeometry(0.07, 0.10, 20),
+        )
+        odometry.update(100, 100, timestamp=1.0)
+        pose = odometry.update(120, 120, timestamp=2.0)
+
+        self.assertAlmostEqual(pose.x, pi * 0.07)
+        self.assertAlmostEqual(pose.y, 0.0)
+        self.assertAlmostEqual(pose.yaw, 0.0)
+
+    def test_opposite_wheel_ticks_rotate_in_place(self) -> None:
+        geometry = DifferentialDriveGeometry(0.07, 0.10, 20)
+        odometry = EncoderOdometry(geometry)
+        odometry.update(0, 0, timestamp=1.0)
+        pose = odometry.update(-5, 5, timestamp=2.0)
+
+        self.assertAlmostEqual(pose.x, 0.0)
+        self.assertAlmostEqual(pose.y, 0.0)
+        self.assertGreater(pose.yaw, 0.0)
+
+    def test_wheel_distances_support_reverse_arcs(self) -> None:
+        pose = integrate_wheel_distances(
+            PlanarPose(),
+            left_distance=-0.2,
+            right_distance=-0.1,
+            wheel_separation=0.1,
+        )
+
+        self.assertLess(pose.x, 0.0)
+        self.assertGreater(pose.yaw, 0.0)
+
+    def test_encoder_rejects_non_monotonic_time_and_tick_spikes(self) -> None:
+        odometry = EncoderOdometry(
+            DifferentialDriveGeometry(0.07, 0.10, 20),
+            max_tick_delta=100,
+        )
+        odometry.update(0, 0, timestamp=1.0)
+        with self.assertRaisesRegex(ValueError, "timestamp"):
+            odometry.update(1, 1, timestamp=1.0)
+        with self.assertRaisesRegex(ValueError, "tick delta"):
+            odometry.update(101, 0, timestamp=2.0)
+
+    def test_invalid_encoder_geometry_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "dimensions"):
+            DifferentialDriveGeometry(0.0, 0.1, 20)
+        with self.assertRaisesRegex(ValueError, "ticks_per_revolution"):
+            DifferentialDriveGeometry(0.07, 0.1, 0)
 
     def test_odometry_launch_includes_description_and_node(self) -> None:
         source = (ROOT / "launch/buddy_odometry.launch.py").read_text(
