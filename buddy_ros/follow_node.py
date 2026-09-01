@@ -5,9 +5,8 @@ from math import isfinite
 import time
 from typing import Any
 
-from buddy_ros.follow_control import FollowCommand, decide_follow_command
+from buddy_ros.follow_control import FollowCommand, FollowCoordinator
 from buddy_ros.person_control import PersonTarget
-from robot.distance import ObstacleLatch
 
 
 def create_follow_node_class() -> type[Any]:
@@ -38,23 +37,23 @@ def create_follow_node_class() -> type[Any]:
             self.declare_parameter("require_power_status", False)
             self.declare_parameter("power_timeout", 2.5)
 
-            self.enabled = bool(self.get_parameter("enabled").value)
-            self.input_timeout = max(
+            enabled = bool(self.get_parameter("enabled").value)
+            input_timeout = max(
                 0.1,
                 float(self.get_parameter("input_timeout").value),
             )
-            self.linear_speed = max(
+            linear_speed = max(
                 0.0,
                 float(self.get_parameter("linear_speed").value),
             )
-            self.angular_speed = max(
+            angular_speed = max(
                 0.0,
                 float(self.get_parameter("angular_speed").value),
             )
-            self.require_power_status = bool(
+            require_power_status = bool(
                 self.get_parameter("require_power_status").value
             )
-            self.power_timeout = max(
+            power_timeout = max(
                 0.1,
                 float(self.get_parameter("power_timeout").value),
             )
@@ -62,23 +61,23 @@ def create_follow_node_class() -> type[Any]:
                 0.1,
                 float(self.get_parameter("update_rate_hz").value),
             )
-            self.obstacle_latch = ObstacleLatch(
-                stop_distance_cm=(
-                    float(self.get_parameter("stop_distance_m").value) * 100.0
+            self.coordinator = FollowCoordinator(
+                input_timeout=input_timeout,
+                stop_distance_m=(
+                    float(self.get_parameter("stop_distance_m").value)
                 ),
-                resume_distance_cm=(
-                    float(self.get_parameter("resume_distance_m").value) * 100.0
+                resume_distance_m=(
+                    float(self.get_parameter("resume_distance_m").value)
                 ),
                 resume_confirm_frames=int(
                     self.get_parameter("resume_confirm_frames").value
                 ),
+                linear_speed=linear_speed,
+                angular_speed=angular_speed,
+                require_power_status=require_power_status,
+                power_timeout=power_timeout,
             )
-            self.latest_target: PersonTarget | None = None
-            self.latest_target_at: float | None = None
-            self.latest_distance_m: float | None = None
-            self.latest_distance_at: float | None = None
-            self.latest_power_good: bool | None = None
-            self.latest_power_at: float | None = None
+            self.coordinator.enabled = enabled
             self.last_status = ""
 
             self.command_publisher = self.create_publisher(Twist, "/cmd_vel", 10)
@@ -113,89 +112,48 @@ def create_follow_node_class() -> type[Any]:
             self.timer = self.create_timer(1.0 / update_rate_hz, self._update)
             self.get_logger().info(
                 "follow ready enabled="
-                f"{str(self.enabled).lower()} service=/follow/enable"
+                f"{str(self.coordinator.enabled).lower()} service=/follow/enable"
             )
 
         def _on_person(self, message: Any) -> None:
             try:
-                self.latest_target = PersonTarget.from_json(message.data)
+                target = PersonTarget.from_json(message.data)
             except ValueError as exc:
                 self.get_logger().warning(f"invalid person target: {exc}")
                 return
-            self.latest_target_at = time.monotonic()
+            self.coordinator.update_target(target, measured_at=time.monotonic())
 
         def _on_distance(self, message: Any) -> None:
             distance_m = float(message.range)
             if not isfinite(distance_m) or distance_m < 0:
                 return
-            self.latest_distance_m = distance_m
-            self.latest_distance_at = time.monotonic()
+            self.coordinator.update_distance(
+                distance_m,
+                measured_at=time.monotonic(),
+            )
 
         def _on_power(self, message: Any) -> None:
-            self.latest_power_good = bool(message.data)
-            self.latest_power_at = time.monotonic()
+            self.coordinator.update_power(
+                bool(message.data),
+                measured_at=time.monotonic(),
+            )
 
         def _on_enable(self, request: Any, response: Any) -> Any:
-            self.enabled = bool(request.data)
-            if not self.enabled:
-                self._publish_command(FollowCommand("stop", "disabled"))
+            command = self.coordinator.set_enabled(bool(request.data))
+            if not self.coordinator.enabled:
+                self._publish_command(command)
             response.success = True
             response.message = (
-                "person following enabled" if self.enabled else "stopped"
+                "person following enabled"
+                if self.coordinator.enabled
+                else "stopped"
             )
             return response
 
-        def _fresh_value(
-            self,
-            value: Any,
-            measured_at: float | None,
-            now: float,
-        ) -> Any | None:
-            if measured_at is None or now - measured_at > self.input_timeout:
-                return None
-            return value
-
         def _update(self) -> None:
             now = time.monotonic()
-            target = self._fresh_value(
-                self.latest_target,
-                self.latest_target_at,
-                now,
-            )
-            distance_m = self._fresh_value(
-                self.latest_distance_m,
-                self.latest_distance_at,
-                now,
-            )
-            obstacle_latched = self.obstacle_latch.update(
-                None if distance_m is None else distance_m * 100.0,
-                raw_distance_cm=(
-                    None if distance_m is None else distance_m * 100.0
-                ),
-            )
-            safety_stop_reason = self._power_stop_reason(now)
-            command = decide_follow_command(
-                target,
-                distance_m,
-                enabled=self.enabled,
-                obstacle_latched=obstacle_latched,
-                safety_stop_reason=safety_stop_reason,
-                linear_speed=self.linear_speed,
-                angular_speed=self.angular_speed,
-            )
+            command = self.coordinator.command(now=now)
             self._publish_command(command)
-
-        def _power_stop_reason(self, now: float) -> str | None:
-            if not self.require_power_status:
-                return None
-            if (
-                self.latest_power_at is None
-                or now - self.latest_power_at > self.power_timeout
-            ):
-                return "power-not-ready"
-            if self.latest_power_good is not True:
-                return "power-low"
-            return None
 
         def _publish_command(self, command: FollowCommand) -> None:
             message = Twist()
@@ -206,7 +164,7 @@ def create_follow_node_class() -> type[Any]:
             status = json.dumps(
                 {
                     "action": command.action,
-                    "enabled": self.enabled,
+                    "enabled": self.coordinator.enabled,
                     "reason": command.reason,
                 },
                 separators=(",", ":"),

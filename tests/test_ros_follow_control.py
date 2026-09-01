@@ -1,6 +1,6 @@
 import unittest
 
-from buddy_ros.follow_control import decide_follow_command
+from buddy_ros.follow_control import FollowCoordinator, decide_follow_command
 from buddy_ros.person_control import PersonTarget
 
 
@@ -133,6 +133,68 @@ class RosFollowControlTest(unittest.TestCase):
             ).reason,
             "person-confirming",
         )
+
+    def test_coordinator_stops_when_person_input_expires(self) -> None:
+        coordinator = FollowCoordinator(input_timeout=0.5)
+        coordinator.set_enabled(True)
+        coordinator.update_target(self.make_target(), measured_at=1.0)
+        coordinator.update_distance(2.0, measured_at=1.0)
+
+        self.assertEqual(coordinator.command(now=1.4).action, "forward")
+        expired = coordinator.command(now=1.6)
+        self.assertEqual(
+            (expired.action, expired.reason),
+            ("stop", "person-not-ready"),
+        )
+
+    def test_coordinator_never_moves_forward_without_fresh_distance(self) -> None:
+        coordinator = FollowCoordinator(input_timeout=0.5)
+        coordinator.set_enabled(True)
+        coordinator.update_target(self.make_target(), measured_at=1.0)
+
+        command = coordinator.command(now=1.1)
+
+        self.assertEqual(
+            (command.action, command.reason),
+            ("stop", "distance-not-ready"),
+        )
+
+    def test_coordinator_requires_fresh_good_power_when_configured(self) -> None:
+        coordinator = FollowCoordinator(
+            require_power_status=True,
+            power_timeout=0.5,
+        )
+        coordinator.set_enabled(True)
+        coordinator.update_target(self.make_target(), measured_at=1.0)
+        coordinator.update_distance(2.0, measured_at=1.0)
+
+        self.assertEqual(coordinator.command(now=1.1).reason, "power-not-ready")
+        coordinator.update_power(False, measured_at=1.1)
+        self.assertEqual(coordinator.command(now=1.2).reason, "power-low")
+        coordinator.update_power(True, measured_at=1.2)
+        self.assertEqual(coordinator.command(now=1.3).action, "forward")
+        self.assertEqual(coordinator.command(now=1.8).reason, "power-not-ready")
+
+    def test_obstacle_release_counts_new_sensor_frames(self) -> None:
+        coordinator = FollowCoordinator(resume_confirm_frames=2)
+        coordinator.set_enabled(True)
+        coordinator.update_target(self.make_target(), measured_at=1.0)
+        coordinator.update_distance(0.3, measured_at=1.0)
+        self.assertEqual(coordinator.command(now=1.1).reason, "obstacle")
+
+        coordinator.update_distance(1.0, measured_at=1.2)
+        self.assertEqual(coordinator.command(now=1.2).reason, "obstacle")
+        self.assertEqual(coordinator.command(now=1.3).reason, "obstacle")
+        coordinator.update_distance(1.0, measured_at=1.4)
+        self.assertEqual(coordinator.command(now=1.4).action, "forward")
+
+    def test_disabling_coordinator_always_returns_stop(self) -> None:
+        coordinator = FollowCoordinator()
+        coordinator.set_enabled(True)
+
+        command = coordinator.set_enabled(False)
+
+        self.assertEqual((command.action, command.reason), ("stop", "disabled"))
 
 
 if __name__ == "__main__":
