@@ -12,6 +12,8 @@
 - 各段階でモック確認を行い、その後に車輪を浮かせて実機確認する。
 - ROS 2ノードは`robot/`の既存ロジックを再利用する。
 - 新しい走行指令タイムアウトは追加しない。
+- 会話のドメイン状態はROS 2に依存させず、型付きイベントとして定義する。
+- ROS 2への公開はアダプター層で行い、会話の単体テストにROS 2を必須にしない。
 
 最終的な構成は次を予定する。
 
@@ -23,6 +25,11 @@ distance_node ------ range -------------+                       ^
 conversation_node -- follow start/stop -------------------------+
 power_node --------- safety stop -------------------------------+
 ```
+
+会話側は`ConversationEvent`として`waiting`、`listening`、`thinking`、
+`speaking`、`stopped`のフェーズと、`calm`、`curious`、`warm`、
+`confused`、`cautious`、`happy`のリアクションを保持する。現在はROS非依存の
+状態遷移と通知境界まで実装し、次の段階でROS 2アダプターを追加する。
 
 ## Step 0: Raspberry Piの環境を確認する
 

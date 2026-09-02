@@ -27,6 +27,11 @@ from robot.conversation_loop_cli import (
     is_mobility_stop_transcript,
     run_conversation_loop,
 )
+from robot.conversation_state import (
+    ConversationEvent,
+    ConversationPhase,
+    ConversationReaction,
+)
 from robot.speech import MockSpeechSynthesizer
 from robot.transcription import (
     MockTranscriber,
@@ -160,6 +165,36 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(len(player.played), 2)
             self.assertEqual(pauses, [0.25])
             self.assertIn("turn=2 reply=返事", logs)
+
+    def test_conversation_emits_transport_independent_state_events(self) -> None:
+        events: list[ConversationEvent] = []
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("こんにちは"),
+            reply_generator=MockReplyGenerator("やあ"),
+            synthesizer=MockSpeechSynthesizer(),
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            on_conversation_event=events.append,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(
+            [(event.phase, event.reaction) for event in events],
+            [
+                (ConversationPhase.LISTENING, ConversationReaction.CALM),
+                (ConversationPhase.THINKING, ConversationReaction.CURIOUS),
+                (ConversationPhase.SPEAKING, ConversationReaction.WARM),
+                (ConversationPhase.STOPPED, ConversationReaction.CALM),
+            ],
+        )
 
     def test_repeat_request_replays_previous_audio_without_api_calls(self) -> None:
         reply_generator = MockReplyGenerator("やさしい返事")

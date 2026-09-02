@@ -24,6 +24,12 @@ from robot.conversation_memory import (
     DEFAULT_CONVERSATION_MEMORY_PATH,
     ConversationMemoryStore,
 )
+from robot.conversation_state import (
+    ConversationEventHandler,
+    ConversationPhase,
+    ConversationReaction,
+    ConversationStateTracker,
+)
 from robot.conversation_intents import (
     DEFAULT_FAREWELL_REPLY,
     DEFAULT_INACTIVITY_REPLY,
@@ -312,6 +318,7 @@ def run_conversation_loop(
     handle_child_game: Callable[[str], str | None] | None = None,
     child_game_active: Callable[[], bool] | None = None,
     handle_profile_memory: Callable[[str], str | None] | None = None,
+    on_conversation_event: ConversationEventHandler | None = None,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -327,10 +334,16 @@ def run_conversation_loop(
     consecutive_silences = 0
     mobility_confirmation_pending = False
     last_spoken_source: Path | None = None
+    state = ConversationStateTracker(on_conversation_event)
 
     def play_with_stop_interrupt(source: Path, turn: int) -> None:
         nonlocal last_spoken_source
         last_spoken_source = source
+        state.transition(
+            ConversationPhase.SPEAKING,
+            ConversationReaction.WARM,
+            "reply",
+        )
         player.play(source)
         consume_stop = getattr(player, "consume_stop_request", None)
         if not callable(consume_stop) or not consume_stop():
@@ -382,6 +395,11 @@ def run_conversation_loop(
                     completed_turns += 1
                     continue
             output(f"turn={turn} listening=true")
+            state.transition(
+                ConversationPhase.LISTENING,
+                ConversationReaction.CALM,
+                "awaiting-speech",
+            )
             try:
                 source = recorder.record(
                     input_path,
@@ -430,6 +448,11 @@ def run_conversation_loop(
 
             transcript = transcriber.transcribe(source, language=language)
             output(f"turn={turn} transcript={transcript or 'not-found'}")
+            state.transition(
+                ConversationPhase.THINKING,
+                ConversationReaction.CURIOUS,
+                "transcript-ready",
+            )
 
             # A recognized stop command must bypass all rejection and dialog state.
             if transcript and is_mobility_stop_transcript(transcript):
@@ -662,6 +685,11 @@ def run_conversation_loop(
         if not catch_interrupt:
             raise
         output("Stopping conversation loop.")
+    state.transition(
+        ConversationPhase.STOPPED,
+        ConversationReaction.CALM,
+        "session-ended",
+    )
     return completed_turns
 
 
