@@ -7,7 +7,9 @@ from robot.interaction import (
     GpioButtonStartTrigger,
     InteractionState,
     KeyboardStartTrigger,
+    TriggerActivation,
     VoskWakeWordTrigger,
+    is_active_hour,
     normalize_wake_phrase,
     run_interaction_station,
     wake_phrase_detected,
@@ -66,6 +68,14 @@ class FakeWakeWordRecognizer:
         return '{"text": "ねえ バディ"}'
 
 
+class SilentWakeWordRecognizer(FakeWakeWordRecognizer):
+    def AcceptWaveform(self, chunk: bytes) -> bool:
+        if len(chunk) != 3200:
+            raise AssertionError("unexpected audio frame size")
+        self.calls += 1
+        return False
+
+
 class FakeAudioProcess:
     class Stdout:
         def __init__(self, chunks: list[bytes]) -> None:
@@ -98,6 +108,13 @@ class FakeAudioProcess:
 
 
 class InteractionTest(unittest.TestCase):
+    def test_active_hours_support_daytime_and_overnight_windows(self) -> None:
+        self.assertTrue(is_active_hour(9, 8, 20))
+        self.assertFalse(is_active_hour(22, 8, 20))
+        self.assertTrue(is_active_hour(23, 20, 8))
+        self.assertTrue(is_active_hour(7, 20, 8))
+        self.assertFalse(is_active_hour(12, 20, 8))
+
     def test_keyboard_enter_starts_and_q_stops(self) -> None:
         values = iter(["", "q"])
         trigger = KeyboardStartTrigger(lambda _: next(values))
@@ -179,6 +196,51 @@ class InteractionTest(unittest.TestCase):
 
         self.assertEqual(recognizer.reset_calls, 2)
         self.assertEqual(processes, [])
+
+    def test_wake_word_can_start_a_proactive_session_after_idle_time(self) -> None:
+        recognizer = FakeWakeWordRecognizer()
+        frame = bytes(3200)
+        process = FakeAudioProcess([frame])
+        trigger = VoskWakeWordTrigger(
+            recognizer=recognizer,
+            proactive_interval=0.1,
+            chunk_duration=0.1,
+            process_factory=lambda *args, **kwargs: process,
+        )
+
+        self.assertTrue(trigger.wait())
+        self.assertEqual(trigger.activation, TriggerActivation.PROACTIVE)
+        self.assertTrue(process.terminated)
+
+    def test_proactive_session_respects_allowed_hours(self) -> None:
+        recognizer = SilentWakeWordRecognizer()
+        frame = bytes(3200)
+        process = FakeAudioProcess([frame, frame])
+        allowed = iter((False, True))
+        trigger = VoskWakeWordTrigger(
+            recognizer=recognizer,
+            proactive_interval=0.1,
+            chunk_duration=0.1,
+            proactive_allowed=lambda: next(allowed),
+            process_factory=lambda *args, **kwargs: process,
+        )
+
+        self.assertTrue(trigger.wait())
+        self.assertEqual(trigger.activation, TriggerActivation.PROACTIVE)
+
+    def test_wake_word_takes_priority_over_proactive_timeout(self) -> None:
+        recognizer = FakeWakeWordRecognizer()
+        frame = bytes(3200)
+        process = FakeAudioProcess([frame, frame])
+        trigger = VoskWakeWordTrigger(
+            recognizer=recognizer,
+            proactive_interval=0.2,
+            chunk_duration=0.1,
+            process_factory=lambda *args, **kwargs: process,
+        )
+
+        self.assertTrue(trigger.wait())
+        self.assertEqual(trigger.activation, TriggerActivation.USER)
 
     def test_wake_word_phrase_must_not_be_empty(self) -> None:
         with self.assertRaisesRegex(ValueError, "phrase"):

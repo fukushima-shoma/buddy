@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 import time
 from typing import Any, Callable
@@ -62,7 +63,9 @@ from robot.interaction import (
     DEFAULT_WAKE_PHRASE,
     DEFAULT_WAKE_WORD_REARM_DELAY,
     InteractionState,
+    TriggerActivation,
     create_start_trigger,
+    is_active_hour,
     run_interaction_station,
 )
 from robot.mobility import PersonFollowProcessController, Ros2FollowController
@@ -98,6 +101,7 @@ DEFAULT_RETRY_REPLIES = (
     "ゆっくりで大丈夫だよ。もう一度聞かせてね。",
 )
 DEFAULT_MAX_SILENCE_TURNS = 2
+PROACTIVE_INVITATION = "ねえ、いっしょにお話ししない？"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -277,6 +281,24 @@ def build_parser() -> argparse.ArgumentParser:
             "Seconds to ignore playback echo after a wake-word session "
             f"(default: {DEFAULT_WAKE_WORD_REARM_DELAY})."
         ),
+    )
+    parser.add_argument(
+        "--proactive-interval",
+        type=float,
+        default=0.0,
+        help="Idle seconds before Buddy invites a conversation; 0 disables it.",
+    )
+    parser.add_argument(
+        "--proactive-start-hour",
+        type=int,
+        choices=range(24),
+        default=8,
+    )
+    parser.add_argument(
+        "--proactive-end-hour",
+        type=int,
+        choices=range(24),
+        default=20,
     )
     parser.add_argument(
         "--orientation-backend",
@@ -859,6 +881,7 @@ def main() -> int:
     )
     child_game = ChildGameController() if args.child_games else None
     profile_memory = SpokenProfileMemory(ParentManagedMemory(args.profile_memory))
+    current_activation = TriggerActivation.USER
     conversation_event_sink: Any | None = None
     if args.conversation_events == "ros2":
         from buddy_ros.conversation_events import Ros2ConversationEventSink
@@ -934,7 +957,11 @@ def main() -> int:
             retry_replies=(
                 CHILD_RETRY_REPLIES if args.child_mode else DEFAULT_RETRY_REPLIES
             ),
-            max_silence_turns=args.max_silence_turns,
+            max_silence_turns=(
+                1
+                if current_activation is TriggerActivation.PROACTIVE
+                else args.max_silence_turns
+            ),
             on_exchange=remember_exchange,
             start_mobility=None if mobility is None else mobility.start,
             stop_mobility=None if mobility is None else mobility.stop,
@@ -974,6 +1001,12 @@ def main() -> int:
         wake_word_device=args.wake_word_device or args.audio_device,
         wake_word_model=args.wake_word_model,
         wake_phrase=args.wake_phrase,
+        proactive_interval=args.proactive_interval,
+        proactive_allowed=lambda: is_active_hour(
+            datetime.now().hour,
+            args.proactive_start_hour,
+            args.proactive_end_hour,
+        ),
     )
     reset_context = getattr(reply_generator, "reset_context", None)
     wake_chime: Path | None = None
@@ -985,9 +1018,34 @@ def main() -> int:
         )
 
     def prepare_session() -> None:
+        nonlocal current_activation
+        current_activation = getattr(
+            trigger,
+            "activation",
+            TriggerActivation.USER,
+        )
         if callable(reset_context):
             reset_context()
-        if wake_chime is not None:
+        if current_activation is TriggerActivation.PROACTIVE:
+            if conversation_event_sink is not None:
+                conversation_event_sink(
+                    ConversationEvent(
+                        ConversationPhase.SPEAKING,
+                        ConversationReaction.WARM,
+                        "proactive-invitation",
+                    )
+                )
+            try:
+                invitation = synthesizer.synthesize(
+                    PROACTIVE_INVITATION,
+                    Path("captures/audio/proactive-invitation.wav"),
+                )
+                player.play(invitation)
+            except RuntimeError as exc:
+                print(f"proactive-invitation=error detail={exc}")
+                if wake_chime is not None:
+                    player.play(wake_chime)
+        elif wake_chime is not None:
             if conversation_event_sink is not None:
                 conversation_event_sink(
                     ConversationEvent(

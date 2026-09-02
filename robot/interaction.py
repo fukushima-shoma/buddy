@@ -20,6 +20,22 @@ class InteractionState(str, Enum):
     STOPPED = "stopped"
 
 
+class TriggerActivation(str, Enum):
+    USER = "user"
+    PROACTIVE = "proactive"
+
+
+def is_active_hour(hour: int, start_hour: int, end_hour: int) -> bool:
+    """Return whether an hour is inside a daily window, including overnight."""
+    if not all(0 <= value <= 23 for value in (hour, start_hour, end_hour)):
+        raise ValueError("active hours must be between 0 and 23")
+    if start_hour == end_hour:
+        return True
+    if start_hour < end_hour:
+        return start_hour <= hour < end_hour
+    return hour >= start_hour or hour < end_hour
+
+
 class StartTrigger(Protocol):
     name: str
 
@@ -107,6 +123,8 @@ class VoskWakeWordTrigger:
         phrase: str = DEFAULT_WAKE_PHRASE,
         sample_rate: int = 16000,
         chunk_duration: float = 0.1,
+        proactive_interval: float = 0.0,
+        proactive_allowed: Callable[[], bool] | None = None,
         recognizer: Any | None = None,
         process_factory: Callable[..., Any] = subprocess.Popen,
     ) -> None:
@@ -151,14 +169,22 @@ class VoskWakeWordTrigger:
         self.phrase = phrase
         self.sample_rate = sample_rate
         self._chunk_bytes = max(1, round(sample_rate * chunk_duration)) * 2
+        self._proactive_chunks = (
+            0
+            if proactive_interval <= 0
+            else max(1, round(proactive_interval / chunk_duration))
+        )
+        self._proactive_allowed = proactive_allowed or (lambda: True)
         self._targets = (normalize_wake_phrase(phrase),)
         self._recognizer = recognizer
         self._process_factory = process_factory
+        self.activation = TriggerActivation.USER
 
     def wait(self) -> bool:
         if self._recognizer is None:
             raise RuntimeError("Wake word trigger is already closed.")
         self._recognizer.Reset()
+        chunks_waited = 0
         command = [
             "arecord",
             "--quiet",
@@ -186,11 +212,20 @@ class VoskWakeWordTrigger:
                 if len(chunk) != self._chunk_bytes:
                     raise RuntimeError("arecord stopped while waiting for wake word")
                 completed = self._recognizer.AcceptWaveform(chunk)
-                if not completed:
-                    continue
-                payload = self._recognizer.Result()
-                if wake_phrase_detected(payload, self._targets):
-                    return True
+                chunks_waited += 1
+                if completed:
+                    payload = self._recognizer.Result()
+                    if wake_phrase_detected(payload, self._targets):
+                        self.activation = TriggerActivation.USER
+                        return True
+                if (
+                    self._proactive_chunks > 0
+                    and chunks_waited >= self._proactive_chunks
+                ):
+                    chunks_waited = 0
+                    if self._proactive_allowed():
+                        self.activation = TriggerActivation.PROACTIVE
+                        return True
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -212,6 +247,8 @@ def create_start_trigger(
     wake_word_device: str = "default",
     wake_word_model: Path | None = None,
     wake_phrase: str = DEFAULT_WAKE_PHRASE,
+    proactive_interval: float = 0.0,
+    proactive_allowed: Callable[[], bool] | None = None,
 ) -> StartTrigger:
     if backend == "keyboard":
         return KeyboardStartTrigger()
@@ -222,6 +259,8 @@ def create_start_trigger(
             device=wake_word_device,
             model_path=wake_word_model,
             phrase=wake_phrase,
+            proactive_interval=proactive_interval,
+            proactive_allowed=proactive_allowed,
         )
     raise ValueError(f"Unknown start trigger: {backend}")
 

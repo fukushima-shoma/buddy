@@ -35,7 +35,10 @@ ExecStart=/home/shofukus/buddy/scripts/run_buddy_conversation_ros2.sh \
   --pause 0.15 \
   --max-silence-turns 2 \
   --start-trigger wakeword \
-  --wake-word-model /home/shofukus/buddy/models/wakeword/vosk-model-small-ja-0.22
+  --wake-word-model /home/shofukus/buddy/models/wakeword/vosk-model-small-ja-0.22 \
+  --proactive-interval 900 \
+  --proactive-start-hour 8 \
+  --proactive-end-hour 20
 ExecStopPost=/home/shofukus/buddy/scripts/stop_buddy_ros_follow.sh
 Restart=on-failure
 RestartSec=5
