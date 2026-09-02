@@ -344,13 +344,18 @@ def run_conversation_loop(
     last_spoken_source: Path | None = None
     state = ConversationStateTracker(on_conversation_event)
 
-    def play_with_stop_interrupt(source: Path, turn: int) -> None:
+    def play_with_stop_interrupt(
+        source: Path,
+        turn: int,
+        reaction: ConversationReaction = ConversationReaction.WARM,
+        reason: str = "reply",
+    ) -> None:
         nonlocal last_spoken_source
         last_spoken_source = source
         state.transition(
             ConversationPhase.SPEAKING,
-            ConversationReaction.WARM,
-            "reply",
+            reaction,
+            reason,
         )
         player.play(source)
         consume_stop = getattr(player, "consume_stop_request", None)
@@ -367,6 +372,12 @@ def run_conversation_loop(
         generated = synthesizer.synthesize(confirmation, speech_output)
         output(f"turn={turn} interrupt-reply={confirmation}")
         output(f"turn={turn} interrupt-synthesized={generated}")
+        last_spoken_source = generated
+        state.transition(
+            ConversationPhase.SPEAKING,
+            ConversationReaction.CAUTIOUS,
+            "local-voice-interrupt",
+        )
         player.play(generated)
         consume_stop()
         output(f"turn={turn} interrupt-played={generated}")
@@ -398,7 +409,12 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={reply} reason=power-safety-stop")
                     generated = synthesizer.synthesize(reply, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(
+                        generated,
+                        turn,
+                        ConversationReaction.CAUTIOUS,
+                        "power-safety-stop",
+                    )
                     output(f"turn={turn} played={generated}")
                     completed_turns += 1
                     continue
@@ -435,7 +451,7 @@ def run_conversation_loop(
                         speech_output,
                     )
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(generated, turn, reason="inactivity")
                     output(f"turn={turn} played={generated}")
                     completed_turns += 1
                     break
@@ -446,7 +462,12 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={retry} reason=no-speech")
                     generated = synthesizer.synthesize(retry, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(
+                        generated,
+                        turn,
+                        ConversationReaction.CONFUSED,
+                        "no-speech",
+                    )
                     output(f"turn={turn} played={generated}")
                     recognition_failures += 1
                 completed_turns += 1
@@ -475,7 +496,12 @@ def run_conversation_loop(
                 output(f"turn={turn} reply={reply} reason={reason}")
                 generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
+                play_with_stop_interrupt(
+                    generated,
+                    turn,
+                    ConversationReaction.CAUTIOUS,
+                    reason,
+                )
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -493,7 +519,12 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={retry} reason={failure_reason}")
                     generated = synthesizer.synthesize(retry, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(
+                        generated,
+                        turn,
+                        ConversationReaction.CONFUSED,
+                        failure_reason,
+                    )
                     output(f"turn={turn} played={generated}")
                     recognition_failures += 1
                 else:
@@ -508,7 +539,11 @@ def run_conversation_loop(
                         f"turn={turn} repeated={last_spoken_source} "
                         "reason=repeat-request"
                     )
-                    play_with_stop_interrupt(last_spoken_source, turn)
+                    play_with_stop_interrupt(
+                        last_spoken_source,
+                        turn,
+                        reason="repeat-request",
+                    )
                     output(f"turn={turn} played={last_spoken_source}")
                 else:
                     output(
@@ -520,7 +555,11 @@ def run_conversation_loop(
                         speech_output,
                     )
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(
+                        generated,
+                        turn,
+                        reason="nothing-to-repeat",
+                    )
                     output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -565,7 +604,19 @@ def run_conversation_loop(
                 output(f"turn={turn} reply={reply} reason={reason}")
                 generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
+                confirmation_reaction = (
+                    ConversationReaction.CAUTIOUS
+                    if reason in {"power-low", "power-unavailable"}
+                    else ConversationReaction.CONFUSED
+                    if reason == "mobility-confirmation-required"
+                    else ConversationReaction.WARM
+                )
+                play_with_stop_interrupt(
+                    generated,
+                    turn,
+                    confirmation_reaction,
+                    reason,
+                )
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -582,7 +633,17 @@ def run_conversation_loop(
                 output(f"turn={turn} reply={reply} reason=power-status")
                 generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
+                power_reaction = (
+                    ConversationReaction.CALM
+                    if power_state is True
+                    else ConversationReaction.CAUTIOUS
+                )
+                play_with_stop_interrupt(
+                    generated,
+                    turn,
+                    power_reaction,
+                    "power-status",
+                )
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -605,7 +666,7 @@ def run_conversation_loop(
                 )
                 generated = synthesizer.synthesize(goodbye, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
+                play_with_stop_interrupt(generated, turn, reason="farewell")
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 break
@@ -635,7 +696,16 @@ def run_conversation_loop(
                 output(f"turn={turn} reply={reply} reason={reason}")
                 generated = synthesizer.synthesize(reply, speech_output)
                 output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
+                start_reaction = (
+                    ConversationReaction.CAUTIOUS
+                    if reason in {
+                        "power-low",
+                        "power-unavailable",
+                        "mobility-unavailable",
+                    }
+                    else ConversationReaction.CURIOUS
+                )
+                play_with_stop_interrupt(generated, turn, start_reaction, reason)
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -650,7 +720,12 @@ def run_conversation_loop(
                     speech_output,
                 )
                 output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
+                play_with_stop_interrupt(
+                    generated,
+                    turn,
+                    ConversationReaction.CONFUSED,
+                    "ambiguous-mobility-command",
+                )
                 output(f"turn={turn} played={generated}")
                 completed_turns += 1
                 continue
@@ -661,7 +736,12 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={memory_reply} reason=local-memory")
                     generated = synthesizer.synthesize(memory_reply, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(
+                        generated,
+                        turn,
+                        ConversationReaction.HAPPY,
+                        "local-memory",
+                    )
                     output(f"turn={turn} played={generated}")
                     completed_turns += 1
                     continue
@@ -672,7 +752,12 @@ def run_conversation_loop(
                     output(f"turn={turn} reply={game_reply} reason=child-game")
                     generated = synthesizer.synthesize(game_reply, speech_output)
                     output(f"turn={turn} synthesized={generated}")
-                    play_with_stop_interrupt(generated, turn)
+                    play_with_stop_interrupt(
+                        generated,
+                        turn,
+                        ConversationReaction.HAPPY,
+                        "child-game",
+                    )
                     output(f"turn={turn} played={generated}")
                     completed_turns += 1
                     continue

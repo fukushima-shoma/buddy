@@ -270,6 +270,7 @@ class ConversationLoopTest(unittest.TestCase):
 
     def test_local_profile_memory_bypasses_reply_api_and_history(self) -> None:
         exchanges: list[tuple[str, str]] = []
+        events: list[ConversationEvent] = []
         reply_generator = MockReplyGenerator("呼ばれない")
         synthesizer = MockSpeechSynthesizer()
 
@@ -288,6 +289,7 @@ class ConversationLoopTest(unittest.TestCase):
             pause=0,
             on_exchange=lambda user, assistant: exchanges.append((user, assistant)),
             handle_profile_memory=lambda _: "好きな色は、青って覚えたよ。",
+            on_conversation_event=events.append,
             output=lambda _: None,
         )
 
@@ -296,6 +298,14 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(
             synthesizer.inputs,
             ["好きな色は、青って覚えたよ。"],
+        )
+        self.assertIn(
+            ConversationEvent(
+                ConversationPhase.SPEAKING,
+                ConversationReaction.HAPPY,
+                "local-memory",
+            ),
+            events,
         )
 
     def test_empty_transcript_skips_reply_speech_and_playback(self) -> None:
@@ -517,6 +527,7 @@ class ConversationLoopTest(unittest.TestCase):
 
     def test_spoken_stop_command_stops_before_acknowledgement(self) -> None:
         events: list[str] = []
+        conversation_events: list[ConversationEvent] = []
 
         class OrderedSynthesizer(MockSpeechSynthesizer):
             def synthesize(self, text: str, output: Path) -> Path:
@@ -538,12 +549,21 @@ class ConversationLoopTest(unittest.TestCase):
             turns=1,
             pause=0,
             stop_mobility=lambda: events.append("stop") or True,
+            on_conversation_event=conversation_events.append,
             output=lambda _: None,
         )
 
         self.assertEqual(completed, 1)
         self.assertEqual(events, ["stop", "reply"])
         self.assertEqual(synthesizer.inputs, [MOBILITY_STOP_REPLY])
+        self.assertIn(
+            ConversationEvent(
+                ConversationPhase.SPEAKING,
+                ConversationReaction.CAUTIOUS,
+                "mobility-stop",
+            ),
+            conversation_events,
+        )
 
     def test_stop_command_reports_when_robot_was_already_stopped(self) -> None:
         synthesizer = MockSpeechSynthesizer()
@@ -923,6 +943,7 @@ class ConversationLoopTest(unittest.TestCase):
     def test_child_mode_retries_instead_of_using_unreliable_transcript(self) -> None:
         with TemporaryDirectory() as directory:
             logs: list[str] = []
+            events: list[ConversationEvent] = []
             reply_generator = MockReplyGenerator("呼ばれない")
             synthesizer = MockSpeechSynthesizer()
 
@@ -941,6 +962,7 @@ class ConversationLoopTest(unittest.TestCase):
                 pause=0,
                 retry_replies=CHILD_RETRY_REPLIES,
                 reject_transcript=is_unreliable_child_transcript,
+                on_conversation_event=events.append,
                 output=logs.append,
             )
 
@@ -948,6 +970,14 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(synthesizer.inputs, [CHILD_RETRY_REPLIES[0]])
             self.assertTrue(
                 any("reason=uncertain-transcript" in log for log in logs)
+            )
+            self.assertIn(
+                ConversationEvent(
+                    ConversationPhase.SPEAKING,
+                    ConversationReaction.CONFUSED,
+                    "uncertain-transcript",
+                ),
+                events,
             )
 
     def test_default_retry_reply_handles_uncertain_transcript(self) -> None:
