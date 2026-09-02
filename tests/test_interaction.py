@@ -5,6 +5,7 @@ import subprocess
 
 from robot.interaction import (
     GpioButtonStartTrigger,
+    InteractionState,
     KeyboardStartTrigger,
     VoskWakeWordTrigger,
     normalize_wake_phrase,
@@ -225,6 +226,27 @@ class InteractionTest(unittest.TestCase):
         self.assertIn("state=conversation session=1", logs)
         self.assertIn("state=waiting session=2 completed-turns=4", logs)
         self.assertEqual(logs[-1], "state=stopped")
+
+    def test_station_reports_typed_state_changes(self) -> None:
+        trigger = SequenceTrigger([True])
+        states: list[InteractionState] = []
+
+        run_interaction_station(
+            trigger=trigger,
+            run_session=lambda: 1,
+            sessions=1,
+            on_state_change=states.append,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(
+            states,
+            [
+                InteractionState.WAITING,
+                InteractionState.CONVERSATION,
+                InteractionState.STOPPED,
+            ],
+        )
 
     def test_session_limit_stops_without_an_extra_wait(self) -> None:
         trigger = SequenceTrigger([True])

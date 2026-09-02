@@ -29,7 +29,11 @@ power_node --------- safety stop -------------------------------+
 会話側は`ConversationEvent`として`waiting`、`listening`、`thinking`、
 `speaking`、`stopped`のフェーズと、`calm`、`curious`、`warm`、
 `confused`、`cautious`、`happy`のリアクションを保持する。現在はROS非依存の
-状態遷移と通知境界まで実装し、次の段階でROS 2アダプターを追加する。
+状態遷移と通知境界を実装し、ROS 2アダプターが`/conversation/state`、
+`/conversation/reaction`、`/conversation/event`へ配信する。QoSはReliable・Transient Local・
+depth 1とし、後から起動する表示ノードでも最新状態を取得できる。現在は
+`std_msgs/msg/String`を使うが、複数パッケージ構成へ移行する段階で専用interfaceパッケージの
+カスタムmsgへ置き換える。
 
 ## Step 0: Raspberry Piの環境を確認する
 
@@ -562,6 +566,7 @@ ROS 2の`local_setup.bash`は未設定変数を内部で使うため、これを
 - [x] mock低電圧とRaspberry Pi実電源正常時の追従判断を確認
 - [x] 会話からROS 2追従を操作するバックエンドを実装
 - [x] systemdのROS 2待機と音声開始・停止を実機確認
+- [x] 会話状態とリアクションをROS 2へ配信
 
 ## References
 

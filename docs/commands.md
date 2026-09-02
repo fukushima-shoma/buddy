@@ -333,7 +333,7 @@ python -m robot.conversation_loop_cli \
 
 `state=waiting trigger=wakeword`の間に「ねえ、バディ」と呼ぶ。検出すると短い起動音が
 鳴り、`state=conversation`へ切り替わる。会話は最大30返答分の文脈を引き継ぐ。
-以前のセッションからは、ローカルに保存した直近20往復だけを参考情報として引き継ぐ。
+以前のセッションの保存履歴はOpenAI APIへ再送しない。
 会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
 待機中は「ねえ、バディ」と一致する呼びかけだけを受け付け、それ以外の会話や
 「バイバイ」には返答せず、録音ファイルへの保存やOpenAI APIへの送信も行わない。
@@ -347,6 +347,16 @@ Buddyの返答中に大きめの声が2回連続で検出されると再生を�
 割り込みを使わない場合は`--playback-backend alsa`へ戻す。
 標準の呼びかけは`ねえ バディ`。別の言い方を試す場合は、例えば
 `--wake-phrase バディ`を追加する。`models/wakeword/`は`.gitignore`で除外している。
+
+ROS 2環境で会話状態とリアクションを公開する場合は次を追加する。
+
+```sh
+--conversation-events ros2
+```
+
+`/conversation/state`と`/conversation/reaction`は最新値を`std_msgs/msg/String`で配信する。
+`/conversation/event`は`phase`、`reaction`、`reason`を含むJSONを配信する。いずれも
+Reliable・Transient Local・depth 1で、後から起動したLEDや画面ノードも最新状態を取得できる。
 
 ### ラズパイ起動時にBuddyも自動起動する
 

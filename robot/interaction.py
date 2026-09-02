@@ -233,6 +233,7 @@ def run_interaction_station(
     sessions: int = 0,
     rearm_delay: float = 0.0,
     reset_session: Callable[[], None] | None = None,
+    on_state_change: Callable[[InteractionState], None] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
@@ -245,6 +246,8 @@ def run_interaction_station(
     completed_sessions = 0
     try:
         while sessions == 0 or completed_sessions < sessions:
+            if on_state_change is not None:
+                on_state_change(InteractionState.WAITING)
             output(
                 f"state={InteractionState.WAITING.value} trigger={trigger.name}"
             )
@@ -254,6 +257,8 @@ def run_interaction_station(
             session = completed_sessions + 1
             if reset_session is not None:
                 reset_session()
+            if on_state_change is not None:
+                on_state_change(InteractionState.CONVERSATION)
             output(
                 f"state={InteractionState.CONVERSATION.value} session={session}"
             )
@@ -271,5 +276,7 @@ def run_interaction_station(
         output("Stopping interaction station.")
     finally:
         trigger.close()
+        if on_state_change is not None:
+            on_state_change(InteractionState.STOPPED)
         output(f"state={InteractionState.STOPPED.value}")
     return completed_sessions

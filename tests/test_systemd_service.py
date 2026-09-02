@@ -15,6 +15,7 @@ class SystemdServiceTest(unittest.TestCase):
         self.assertIn("EnvironmentFile=/home/shofukus/buddy/.env", service)
         self.assertIn("--start-trigger wakeword", service)
         self.assertIn("--auto-conversation-memory", service)
+        self.assertIn("--conversation-events ros2", service)
         self.assertIn("--mobility-backend ros2-follow", service)
         self.assertIn("--mobility-stop-distance 60", service)
         self.assertIn("--power-monitor raspberry-pi", service)

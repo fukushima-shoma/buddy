@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import time
-from typing import Callable
+from typing import Any, Callable
 from uuid import uuid4
 
 from robot.audio import (
@@ -25,6 +25,7 @@ from robot.conversation_memory import (
     ConversationMemoryStore,
 )
 from robot.conversation_state import (
+    ConversationEvent,
     ConversationEventHandler,
     ConversationPhase,
     ConversationReaction,
@@ -60,6 +61,7 @@ from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
     DEFAULT_WAKE_PHRASE,
     DEFAULT_WAKE_WORD_REARM_DELAY,
+    InteractionState,
     create_start_trigger,
     run_interaction_station,
 )
@@ -175,6 +177,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("off", "person-follow", "ros2-follow"),
         default="off",
         help="Allow exact spoken commands to start and stop person following.",
+    )
+    parser.add_argument(
+        "--conversation-events",
+        choices=("off", "ros2"),
+        default="off",
+        help="Publish conversation state and reactions through ROS 2.",
     )
     parser.add_argument("--mobility-speed", type=float, default=1.0)
     parser.add_argument("--mobility-stop-distance", type=float, default=60.0)
@@ -766,6 +774,11 @@ def main() -> int:
     )
     child_game = ChildGameController() if args.child_games else None
     profile_memory = SpokenProfileMemory(ParentManagedMemory(args.profile_memory))
+    conversation_event_sink: Any | None = None
+    if args.conversation_events == "ros2":
+        from buddy_ros.conversation_events import Ros2ConversationEventSink
+
+        conversation_event_sink = Ros2ConversationEventSink()
     mobility = (
         PersonFollowProcessController(
             speed=args.mobility_speed,
@@ -851,6 +864,7 @@ def main() -> int:
                 None if child_game is None else lambda: child_game.active
             ),
             handle_profile_memory=profile_memory.handle,
+            on_conversation_event=conversation_event_sink,
             reject_transcript=(
                 is_unreliable_child_transcript
                 if args.child_mode
@@ -865,6 +879,8 @@ def main() -> int:
         finally:
             if mobility is not None:
                 mobility.close()
+            if conversation_event_sink is not None:
+                conversation_event_sink.close()
         return 0
 
     trigger = create_start_trigger(
@@ -890,6 +906,22 @@ def main() -> int:
         if wake_chime is not None:
             player.play(wake_chime)
 
+    def publish_interaction_state(interaction_state: InteractionState) -> None:
+        if conversation_event_sink is None:
+            return
+        phase = {
+            InteractionState.WAITING: ConversationPhase.WAITING,
+            InteractionState.CONVERSATION: ConversationPhase.LISTENING,
+            InteractionState.STOPPED: ConversationPhase.STOPPED,
+        }[interaction_state]
+        conversation_event_sink(
+            ConversationEvent(
+                phase,
+                ConversationReaction.CALM,
+                f"station-{interaction_state.value}",
+            )
+        )
+
     try:
         run_interaction_station(
             trigger=trigger,
@@ -901,10 +933,13 @@ def main() -> int:
                 else 0.0
             ),
             reset_session=prepare_session,
+            on_state_change=publish_interaction_state,
         )
     finally:
         if mobility is not None:
             mobility.close()
+        if conversation_event_sink is not None:
+            conversation_event_sink.close()
     return 0
 
 

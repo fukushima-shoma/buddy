@@ -124,6 +124,7 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.wake_word_rearm_delay, 1.5)
         self.assertEqual(args.orientation_backend, "off")
         self.assertEqual(args.mobility_backend, "off")
+        self.assertEqual(args.conversation_events, "off")
         self.assertEqual(args.power_monitor, "off")
         self.assertFalse(args.child_games)
 
