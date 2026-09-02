@@ -105,6 +105,40 @@ def generate_tone(
     return _write_mono_pcm16(output, sample_rate, samples)
 
 
+def generate_tone_sequence(
+    output: Path,
+    *,
+    frequencies: Sequence[float],
+    tone_duration: float = 0.11,
+    gap_duration: float = 0.025,
+    sample_rate: int = 16000,
+    volume: float = 0.2,
+) -> Path:
+    """Generate a short multi-tone cue with fades to avoid audible clicks."""
+    sample_rate = max(1, sample_rate)
+    tone_frames = max(1, round(max(0.01, tone_duration) * sample_rate))
+    gap_frames = max(0, round(max(0.0, gap_duration) * sample_rate))
+    amplitude = round(32767 * min(1.0, max(0.0, volume)))
+    fade_frames = min(tone_frames // 2, max(1, round(0.01 * sample_rate)))
+    samples: list[int] = []
+    for tone_index, frequency in enumerate(frequencies):
+        frequency = max(0.0, frequency)
+        for frame in range(tone_frames):
+            fade_in = min(1.0, frame / fade_frames)
+            fade_out = min(1.0, (tone_frames - frame - 1) / fade_frames)
+            envelope = min(fade_in, fade_out)
+            samples.append(
+                round(
+                    amplitude
+                    * envelope
+                    * math.sin(2 * math.pi * frequency * frame / sample_rate)
+                )
+            )
+        if tone_index + 1 < len(frequencies):
+            samples.extend([0] * gap_frames)
+    return _write_mono_pcm16(output, sample_rate, samples)
+
+
 def inspect_wav(source: Path) -> WavInfo:
     with wave.open(str(source.expanduser()), "rb") as wav_file:
         return WavInfo(

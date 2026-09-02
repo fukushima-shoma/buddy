@@ -22,6 +22,8 @@ class SystemdServiceTest(unittest.TestCase):
         self.assertIn("--child-games", service)
         self.assertIn("--child-mode", service)
         self.assertIn("--audio-device plughw:CARD=Plus,DEV=0", service)
+        self.assertIn("--silence-duration 0.55", service)
+        self.assertIn("--pause 0.15", service)
         self.assertNotIn("--orientation-backend gpiozero", service)
         self.assertNotIn("-m robot.person_follow_cli", service)
         self.assertIn("Restart=on-failure", service)

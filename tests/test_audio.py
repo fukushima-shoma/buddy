@@ -16,6 +16,7 @@ from robot.audio import (
     MockAudioRecorder,
     NoSpeechDetectedError,
     generate_tone,
+    generate_tone_sequence,
     inspect_wav,
     pcm16_rms,
 )
@@ -91,6 +92,22 @@ class AudioTest(unittest.TestCase):
             self.assertEqual(info.sample_rate, 8000)
             self.assertEqual(info.frames, 2000)
             self.assertAlmostEqual(info.duration, 0.25)
+
+    def test_generates_short_two_tone_acknowledgement(self) -> None:
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "chime.wav"
+            generate_tone_sequence(
+                output,
+                frequencies=(660, 990),
+                tone_duration=0.1,
+                gap_duration=0.02,
+                sample_rate=8000,
+            )
+
+            info = inspect_wav(output)
+
+            self.assertEqual(info.frames, 1760)
+            self.assertAlmostEqual(info.duration, 0.22)
 
     def test_mock_recorder_creates_silent_wav(self) -> None:
         with TemporaryDirectory() as directory:

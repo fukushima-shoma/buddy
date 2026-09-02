@@ -14,6 +14,7 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/shofukus/buddy/scripts/run_buddy_conversation_ros2.sh \
   --audio-backend alsa-vad \
   --audio-device plughw:CARD=Plus,DEV=0 \
+  --silence-duration 0.55 \
   --transcription-backend openai \
   --reply-backend openai \
   --child-mode \
@@ -31,6 +32,7 @@ ExecStart=/home/shofukus/buddy/scripts/run_buddy_conversation_ros2.sh \
   --playback-backend alsa-interruptible \
   --playback-device plughw:CARD=Plus,DEV=0 \
   --turns 0 \
+  --pause 0.15 \
   --max-silence-turns 2 \
   --start-trigger wakeword \
   --wake-word-model /home/shofukus/buddy/models/wakeword/vosk-model-small-ja-0.22

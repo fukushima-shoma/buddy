@@ -11,7 +11,7 @@ from robot.audio import (
     AudioPlayer,
     AudioRecorder,
     NoSpeechDetectedError,
-    generate_tone,
+    generate_tone_sequence,
 )
 from robot.audio_cli import create_player, create_recorder
 from robot.child_games import ChildGameController, is_game_end_transcript
@@ -978,17 +978,26 @@ def main() -> int:
     reset_context = getattr(reply_generator, "reset_context", None)
     wake_chime: Path | None = None
     if args.start_trigger == "wakeword":
-        wake_chime = generate_tone(
+        wake_chime = generate_tone_sequence(
             Path("captures/audio/wake-chime.wav"),
-            frequency=880,
-            duration=0.12,
-            volume=0.15,
+            frequencies=(660, 990),
+            tone_duration=0.11,
+            gap_duration=0.025,
+            volume=0.22,
         )
 
     def prepare_session() -> None:
         if callable(reset_context):
             reset_context()
         if wake_chime is not None:
+            if conversation_event_sink is not None:
+                conversation_event_sink(
+                    ConversationEvent(
+                        ConversationPhase.LISTENING,
+                        ConversationReaction.CURIOUS,
+                        "wake-word-recognized",
+                    )
+                )
             player.play(wake_chime)
 
     def publish_interaction_state(interaction_state: InteractionState) -> None:
@@ -999,10 +1008,15 @@ def main() -> int:
             InteractionState.CONVERSATION: ConversationPhase.LISTENING,
             InteractionState.STOPPED: ConversationPhase.STOPPED,
         }[interaction_state]
+        reaction = (
+            ConversationReaction.CURIOUS
+            if interaction_state is InteractionState.CONVERSATION
+            else ConversationReaction.CALM
+        )
         conversation_event_sink(
             ConversationEvent(
                 phase,
-                ConversationReaction.CALM,
+                reaction,
                 f"station-{interaction_state.value}",
             )
         )
