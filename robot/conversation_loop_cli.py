@@ -30,6 +30,10 @@ from robot.conversation_intents import (
     DEFAULT_INACTIVITY_REPLY,
     MOBILITY_ALREADY_RUNNING_REPLY,
     MOBILITY_ALREADY_STOPPED_REPLY,
+    MOBILITY_CANCEL_REPLY,
+    MOBILITY_CLARIFY_REPLY,
+    MOBILITY_CONFIRM_AGAIN_REPLY,
+    MOBILITY_CONFIRM_REPLY,
     MOBILITY_FAREWELL_REPLY,
     MOBILITY_START_REPLY,
     MOBILITY_STOP_REPLY,
@@ -37,7 +41,10 @@ from robot.conversation_intents import (
     POWER_GOOD_REPLY,
     POWER_LOW_REPLY,
     POWER_UNAVAILABLE_REPLY,
+    is_ambiguous_mobility_transcript,
     is_farewell_transcript,
+    is_mobility_cancel_transcript,
+    is_mobility_confirm_transcript,
     is_mobility_start_transcript,
     is_mobility_stop_transcript,
     is_power_status_transcript,
@@ -310,6 +317,7 @@ def run_conversation_loop(
     completed_turns = 0
     recognition_failures = 0
     consecutive_silences = 0
+    mobility_confirmation_pending = False
 
     def play_with_stop_interrupt(source: Path, turn: int) -> None:
         player.play(source)
@@ -411,6 +419,25 @@ def run_conversation_loop(
 
             transcript = transcriber.transcribe(source, language=language)
             output(f"turn={turn} transcript={transcript or 'not-found'}")
+
+            # A recognized stop command must bypass all rejection and dialog state.
+            if transcript and is_mobility_stop_transcript(transcript):
+                mobility_confirmation_pending = False
+                stopped = stop_mobility() if stop_mobility is not None else False
+                reply = (
+                    MOBILITY_STOP_REPLY
+                    if stopped
+                    else MOBILITY_ALREADY_STOPPED_REPLY
+                )
+                reason = "mobility-stop" if stopped else "mobility-already-stopped"
+                output(f"turn={turn} reply={reply} reason={reason}")
+                generated = synthesizer.synthesize(reply, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                play_with_stop_interrupt(generated, turn)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
+
             failure_reason: str | None = None
             if not transcript:
                 failure_reason = "empty-transcript"
@@ -433,6 +460,51 @@ def run_conversation_loop(
                 continue
 
             recognition_failures = 0
+            if mobility_confirmation_pending:
+                if is_mobility_cancel_transcript(transcript):
+                    mobility_confirmation_pending = False
+                    reply = MOBILITY_CANCEL_REPLY
+                    reason = "mobility-start-cancelled"
+                elif is_mobility_confirm_transcript(transcript):
+                    mobility_confirmation_pending = False
+                    reply = MOBILITY_UNAVAILABLE_REPLY
+                    reason = "mobility-unavailable"
+                    power_state = read_power_good(turn)
+                    if power_good is not None and power_state is not True:
+                        reply = (
+                            POWER_LOW_REPLY
+                            if power_state is False
+                            else POWER_UNAVAILABLE_REPLY
+                        )
+                        reason = (
+                            "power-low"
+                            if power_state is False
+                            else "power-unavailable"
+                        )
+                    elif start_mobility is not None:
+                        try:
+                            started = start_mobility()
+                            reply = (
+                                MOBILITY_START_REPLY
+                                if started
+                                else MOBILITY_ALREADY_RUNNING_REPLY
+                            )
+                            reason = (
+                                "mobility-start" if started else "mobility-running"
+                            )
+                        except RuntimeError as exc:
+                            output(f"turn={turn} mobility=error detail={exc}")
+                else:
+                    reply = MOBILITY_CONFIRM_AGAIN_REPLY
+                    reason = "mobility-confirmation-required"
+                output(f"turn={turn} reply={reply} reason={reason}")
+                generated = synthesizer.synthesize(reply, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                play_with_stop_interrupt(generated, turn)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
+
             if is_power_status_transcript(transcript) and power_good is not None:
                 power_state = read_power_good(turn)
                 reply = (
@@ -473,22 +545,6 @@ def run_conversation_loop(
                 completed_turns += 1
                 break
 
-            if is_mobility_stop_transcript(transcript):
-                stopped = stop_mobility() if stop_mobility is not None else False
-                reply = (
-                    MOBILITY_STOP_REPLY
-                    if stopped
-                    else MOBILITY_ALREADY_STOPPED_REPLY
-                )
-                reason = "mobility-stop" if stopped else "mobility-already-stopped"
-                output(f"turn={turn} reply={reply} reason={reason}")
-                generated = synthesizer.synthesize(reply, speech_output)
-                output(f"turn={turn} synthesized={generated}")
-                play_with_stop_interrupt(generated, turn)
-                output(f"turn={turn} played={generated}")
-                completed_turns += 1
-                continue
-
             if is_mobility_start_transcript(transcript):
                 reply = MOBILITY_UNAVAILABLE_REPLY
                 reason = "mobility-unavailable"
@@ -504,19 +560,30 @@ def run_conversation_loop(
                         if power_state is False
                         else "power-unavailable"
                     )
+                elif mobility_active is not None and mobility_active():
+                    reply = MOBILITY_ALREADY_RUNNING_REPLY
+                    reason = "mobility-running"
                 elif start_mobility is not None:
-                    try:
-                        started = start_mobility()
-                        reply = (
-                            MOBILITY_START_REPLY
-                            if started
-                            else MOBILITY_ALREADY_RUNNING_REPLY
-                        )
-                        reason = "mobility-start" if started else "mobility-running"
-                    except RuntimeError as exc:
-                        output(f"turn={turn} mobility=error detail={exc}")
+                    mobility_confirmation_pending = True
+                    reply = MOBILITY_CONFIRM_REPLY
+                    reason = "mobility-confirmation-requested"
                 output(f"turn={turn} reply={reply} reason={reason}")
                 generated = synthesizer.synthesize(reply, speech_output)
+                output(f"turn={turn} synthesized={generated}")
+                play_with_stop_interrupt(generated, turn)
+                output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
+
+            if is_ambiguous_mobility_transcript(transcript):
+                output(
+                    f"turn={turn} reply={MOBILITY_CLARIFY_REPLY} "
+                    "reason=ambiguous-mobility-command"
+                )
+                generated = synthesizer.synthesize(
+                    MOBILITY_CLARIFY_REPLY,
+                    speech_output,
+                )
                 output(f"turn={turn} synthesized={generated}")
                 play_with_stop_interrupt(generated, turn)
                 output(f"turn={turn} played={generated}")

@@ -9,6 +9,10 @@ from robot.conversation_loop_cli import (
     CHILD_RETRY_REPLIES,
     DEFAULT_FAREWELL_REPLY,
     DEFAULT_INACTIVITY_REPLY,
+    MOBILITY_CANCEL_REPLY,
+    MOBILITY_CLARIFY_REPLY,
+    MOBILITY_CONFIRM_AGAIN_REPLY,
+    MOBILITY_CONFIRM_REPLY,
     MOBILITY_START_REPLY,
     MOBILITY_STOP_REPLY,
     MOBILITY_ALREADY_STOPPED_REPLY,
@@ -55,6 +59,15 @@ class NoSpeechRecorder(MockAudioRecorder):
         sample_rate: int,
     ) -> Path:
         raise NoSpeechDetectedError("no speech")
+
+
+class SequenceTranscriber(MockTranscriber):
+    def __init__(self, *texts: str) -> None:
+        super().__init__("")
+        self.texts = iter(texts)
+
+    def transcribe(self, source: Path, *, language: str) -> str:
+        return next(self.texts)
 
 
 class ConversationLoopTest(unittest.TestCase):
@@ -252,14 +265,95 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(stops, ["stop"])
             self.assertIn("reason=conversation-ended", logs[-3])
 
-    def test_spoken_start_command_starts_person_follow_without_reply_api(self) -> None:
+    def test_spoken_start_command_requires_confirmation_before_following(self) -> None:
         starts: list[str] = []
         reply_generator = MockReplyGenerator("呼ばれない")
         synthesizer = MockSpeechSynthesizer()
 
         completed = run_conversation_loop(
             recorder=MockAudioRecorder(),
-            transcriber=MockTranscriber("ついてきて"),
+            transcriber=SequenceTranscriber("ついてきて", "はい"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=2,
+            pause=0,
+            start_mobility=lambda: starts.append("start") or True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(completed, 2)
+        self.assertEqual(starts, ["start"])
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(
+            synthesizer.inputs,
+            [MOBILITY_CONFIRM_REPLY, MOBILITY_START_REPLY],
+        )
+
+    def test_mobility_confirmation_can_be_cancelled_without_starting(self) -> None:
+        starts: list[str] = []
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=SequenceTranscriber("ついてきて", "やめる"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=2,
+            pause=0,
+            start_mobility=lambda: starts.append("start") or True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(starts, [])
+        self.assertEqual(
+            synthesizer.inputs,
+            [MOBILITY_CONFIRM_REPLY, MOBILITY_CANCEL_REPLY],
+        )
+
+    def test_unexpected_confirmation_reply_keeps_motors_stopped(self) -> None:
+        starts: list[str] = []
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=SequenceTranscriber("ついてきて", "たぶん"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=2,
+            pause=0,
+            start_mobility=lambda: starts.append("start") or True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(starts, [])
+        self.assertEqual(synthesizer.inputs[-1], MOBILITY_CONFIRM_AGAIN_REPLY)
+
+    def test_ambiguous_mobility_command_does_not_reach_reply_or_motors(self) -> None:
+        starts: list[str] = []
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("進んで"),
             reply_generator=reply_generator,
             synthesizer=synthesizer,
             player=MockAudioPlayer(),
@@ -274,10 +368,32 @@ class ConversationLoopTest(unittest.TestCase):
             output=lambda _: None,
         )
 
-        self.assertEqual(completed, 1)
-        self.assertEqual(starts, ["start"])
+        self.assertEqual(starts, [])
         self.assertEqual(reply_generator.inputs, [])
-        self.assertEqual(synthesizer.inputs, [MOBILITY_START_REPLY])
+        self.assertEqual(synthesizer.inputs, [MOBILITY_CLARIFY_REPLY])
+
+    def test_stop_bypasses_uncertain_transcript_rejection(self) -> None:
+        events: list[str] = []
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("止まって"),
+            reply_generator=MockReplyGenerator("呼ばれない"),
+            synthesizer=MockSpeechSynthesizer(),
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            stop_mobility=lambda: events.append("stop") or True,
+            reject_transcript=lambda _: True,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(events, ["stop"])
 
     def test_spoken_stop_command_stops_before_acknowledgement(self) -> None:
         events: list[str] = []
