@@ -167,7 +167,7 @@ python -m robot.conversation_loop_cli \
 会話中に「バイバイ」「またね」「さようなら」「おしまい」のいずれかを単独で話すと、
 Buddyがお別れを返して、その会話セッションを指定ターン数より前に終了する。
 
-好きな色など、保護者が確認した固定プロフィールはローカル記憶で管理する。
+好きな色などの固定プロフィールはローカル記憶で管理する。
 
 ```sh
 python -m robot.memory_cli set 好きな色 青
@@ -182,19 +182,20 @@ python -m robot.memory_cli delete 好きな色
 python -m robot.memory_cli clear --yes
 ```
 
-記憶は`data/buddy-memory.json`だけに保存され、Gitの対象外になる。会話コマンドは
-このファイルが存在すると保護者登録情報を読み込む。
+記憶は`data/buddy-memory.json`だけに保存され、Gitの対象外になる。会話中は
+「好きな色は青」「好きな色は何？」「好きな色を忘れて」のように話せる。
+自動保存は色・動物・食べ物のみで、保存・参照・削除と返答は端末内で処理する。
+保存したプロフィールをOpenAI APIのプロンプトへは渡さない。
 
 会話そのものを次回の会話でも覚えさせる場合は、会話コマンドへ次を追加する。
 
 ```sh
---auto-conversation-memory \
---conversation-memory-turns 20
+--auto-conversation-memory
 ```
 
 文字起こしとBuddyの返答を`data/conversation-memory.json`へ自動保存する。音声は会話
-記憶へ複製しない。最大100往復だけを残し、新しい会話セッションの開始時に直近20往復を
-参考情報として渡す。メールアドレスと電話番号は保存前に自動で置換される。ただし、氏名や
+記憶へ複製しない。最大100往復だけを残し、保存履歴は次の会話でOpenAI APIへ
+再送しない。メールアドレスと電話番号は保存前に自動で置換される。ただし、氏名や
 住所などを完全に自動判別するものではないため、保護者が定期的に内容を確認する。
 
 ```sh
@@ -317,7 +318,6 @@ python -m robot.conversation_loop_cli \
   --memory session \
   --memory-turns 30 \
   --auto-conversation-memory \
-  --conversation-memory-turns 20 \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa-interruptible \

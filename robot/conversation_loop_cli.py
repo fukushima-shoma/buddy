@@ -23,7 +23,6 @@ from robot.conversation import (
 from robot.conversation_memory import (
     DEFAULT_CONVERSATION_MEMORY_PATH,
     ConversationMemoryStore,
-    format_conversation_memory,
 )
 from robot.conversation_intents import (
     DEFAULT_FAREWELL_REPLY,
@@ -68,6 +67,7 @@ from robot.speech import (
     SpeechSynthesizer,
 )
 from robot.speech_cli import create_synthesizer
+from robot.spoken_profile_memory import SpokenProfileMemory
 from robot.transcribe_cli import create_transcriber
 from robot.transcription import (
     CHILD_TRANSCRIPTION_PROMPT,
@@ -160,7 +160,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_CONVERSATION_MEMORY_PATH,
     )
-    parser.add_argument("--conversation-memory-turns", type=int, default=20)
     parser.add_argument(
         "--mobility-backend",
         choices=("off", "person-follow", "ros2-follow"),
@@ -308,6 +307,7 @@ def run_conversation_loop(
     power_good: Callable[[], bool] | None = None,
     handle_child_game: Callable[[str], str | None] | None = None,
     child_game_active: Callable[[], bool] | None = None,
+    handle_profile_memory: Callable[[str], str | None] | None = None,
     reject_transcript: Callable[[str], bool] | None = None,
     output: Callable[[str], None] = print,
     sleeper: Callable[[float], None] = time.sleep,
@@ -594,6 +594,17 @@ def run_conversation_loop(
                 completed_turns += 1
                 continue
 
+            if handle_profile_memory is not None:
+                memory_reply = handle_profile_memory(transcript)
+                if memory_reply is not None:
+                    output(f"turn={turn} reply={memory_reply} reason=local-memory")
+                    generated = synthesizer.synthesize(memory_reply, speech_output)
+                    output(f"turn={turn} synthesized={generated}")
+                    play_with_stop_interrupt(generated, turn)
+                    output(f"turn={turn} played={generated}")
+                    completed_turns += 1
+                    continue
+
             if handle_child_game is not None:
                 game_reply = handle_child_game(transcript)
                 if game_reply is not None:
@@ -652,7 +663,6 @@ def main() -> int:
         remember_context=args.memory == "session",
         max_context_turns=args.memory_turns,
         child_mode=args.child_mode,
-        profile_facts=ParentManagedMemory(args.profile_memory).load(),
     )
     synthesizer = create_synthesizer(
         args.speech_backend,
@@ -697,6 +707,7 @@ def main() -> int:
         else None
     )
     child_game = ChildGameController() if args.child_games else None
+    profile_memory = SpokenProfileMemory(ParentManagedMemory(args.profile_memory))
     mobility = (
         PersonFollowProcessController(
             speed=args.mobility_speed,
@@ -742,13 +753,6 @@ def main() -> int:
         session_id = uuid4().hex
         remember_exchange: Callable[[str, str], None] | None = None
         if conversation_store is not None:
-            context = format_conversation_memory(
-                conversation_store.recent(args.conversation_memory_turns)
-            )
-            set_context = getattr(reply_generator, "set_supplemental_context", None)
-            if callable(set_context):
-                set_context(context)
-
             def remember_exchange(user: str, assistant: str) -> None:
                 conversation_store.append(
                     session=session_id,
@@ -788,6 +792,7 @@ def main() -> int:
             child_game_active=(
                 None if child_game is None else lambda: child_game.active
             ),
+            handle_profile_memory=profile_memory.handle,
             reject_transcript=(
                 is_unreliable_child_transcript
                 if args.child_mode

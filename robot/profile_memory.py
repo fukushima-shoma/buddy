@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Mapping
 
 
 DEFAULT_PROFILE_MEMORY_PATH = Path("data/buddy-memory.json")
@@ -19,7 +18,7 @@ def _clean(value: str, *, label: str, limit: int) -> str:
 
 
 class ParentManagedMemory:
-    """Small local profile edited explicitly by a supervising adult."""
+    """Small local profile store for allowlisted facts and adult management."""
 
     def __init__(self, path: Path = DEFAULT_PROFILE_MEMORY_PATH) -> None:
         self.path = path.expanduser()
@@ -68,14 +67,3 @@ class ParentManagedMemory:
             encoding="utf-8",
         )
         temporary.replace(self.path)
-
-
-def format_profile_memory(facts: Mapping[str, str]) -> str:
-    if not facts:
-        return ""
-    lines = [
-        "以下は保護者が明示的に登録した情報です。会話に関係する場合だけ自然に使い、",
-        "登録されていない情報を推測したり、追加の個人情報を尋ねたりしないでください。",
-    ]
-    lines.extend(f"- {key}: {value}" for key, value in sorted(facts.items()))
-    return "\n".join(lines)

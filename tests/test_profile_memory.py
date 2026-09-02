@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from robot.profile_memory import ParentManagedMemory, format_profile_memory
+from robot.profile_memory import ParentManagedMemory
 
 
 class ProfileMemoryTest(unittest.TestCase):
@@ -20,12 +20,6 @@ class ProfileMemoryTest(unittest.TestCase):
             self.assertFalse(memory.delete("知らない項目"))
             memory.clear()
             self.assertEqual(memory.load(), {})
-
-    def test_profile_prompt_marks_facts_as_parent_managed(self) -> None:
-        prompt = format_profile_memory({"好きな色": "青"})
-        self.assertIn("保護者", prompt)
-        self.assertIn("好きな色: 青", prompt)
-        self.assertIn("推測", prompt)
 
     def test_invalid_profile_format_is_rejected(self) -> None:
         with TemporaryDirectory() as directory:

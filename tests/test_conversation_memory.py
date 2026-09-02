@@ -4,7 +4,6 @@ import unittest
 
 from robot.conversation_memory import (
     ConversationMemoryStore,
-    format_conversation_memory,
     sanitize_conversation_text,
 )
 
@@ -26,14 +25,11 @@ class ConversationMemoryTest(unittest.TestCase):
             self.assertEqual(store.delete_session("a"), 1)
             self.assertEqual([entry["user"] for entry in store.load()], ["3"])
 
-    def test_history_can_be_formatted_and_cleared(self) -> None:
+    def test_history_can_be_cleared(self) -> None:
         with TemporaryDirectory() as directory:
             store = ConversationMemoryStore(Path(directory) / "history.json")
             store.append(session="a", user="青が好き", assistant="青、きれいだね")
 
-            context = format_conversation_memory(store.load())
-            self.assertIn("子ども: 青が好き", context)
-            self.assertIn("個人情報", context)
             store.clear()
             self.assertEqual(store.load(), [])
 

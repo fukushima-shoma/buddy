@@ -21,7 +21,6 @@ ExecStart=/home/shofukus/buddy/scripts/run_buddy_conversation_ros2.sh \
   --memory session \
   --memory-turns 30 \
   --auto-conversation-memory \
-  --conversation-memory-turns 20 \
   --mobility-backend ros2-follow \
   --mobility-stop-distance 60 \
   --mobility-resume-distance 70 \

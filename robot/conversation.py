@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Mapping, Protocol
-
-from robot.profile_memory import format_profile_memory
+from typing import Any, Protocol
 
 
 DEFAULT_REPLY_MODEL = "gpt-5.6"
@@ -40,11 +38,8 @@ CHILD_REPLY_INSTRUCTIONS = """\
 
 def get_reply_instructions(
     child_mode: bool,
-    profile_facts: Mapping[str, str] | None = None,
 ) -> str:
-    instructions = CHILD_REPLY_INSTRUCTIONS if child_mode else BUDDY_INSTRUCTIONS
-    profile = format_profile_memory(profile_facts or {})
-    return f"{instructions}\n\n{profile}" if profile else instructions
+    return CHILD_REPLY_INSTRUCTIONS if child_mode else BUDDY_INSTRUCTIONS
 
 
 class ReplyGenerator(Protocol):
@@ -86,7 +81,6 @@ class OpenAIReplyGenerator:
                 ) from exc
             client = OpenAI()
         self.model = model
-        self._base_instructions = instructions
         self.instructions = instructions
         self.remember_context = remember_context
         self.max_context_turns = max(1, max_context_turns)
@@ -122,11 +116,3 @@ class OpenAIReplyGenerator:
     def reset_context(self) -> None:
         self._previous_response_id = None
         self._context_turns = 0
-
-    def set_supplemental_context(self, context: str) -> None:
-        context = context.strip()
-        self.instructions = (
-            f"{self._base_instructions}\n\n{context}"
-            if context
-            else self._base_instructions
-        )

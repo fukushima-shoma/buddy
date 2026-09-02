@@ -7,7 +7,7 @@ from robot.profile_memory import DEFAULT_PROFILE_MEMORY_PATH, ParentManagedMemor
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Manage Buddy's parent-approved memory.")
+    parser = argparse.ArgumentParser(description="Manage Buddy's local profile memory.")
     parser.add_argument("--file", type=Path, default=DEFAULT_PROFILE_MEMORY_PATH)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list")

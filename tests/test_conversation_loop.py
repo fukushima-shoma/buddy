@@ -183,6 +183,36 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(completed, 1)
         self.assertEqual(exchanges, [("青が好き", "青、きれいだね")])
 
+    def test_local_profile_memory_bypasses_reply_api_and_history(self) -> None:
+        exchanges: list[tuple[str, str]] = []
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("好きな色は青"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            on_exchange=lambda user, assistant: exchanges.append((user, assistant)),
+            handle_profile_memory=lambda _: "好きな色は、青って覚えたよ。",
+            output=lambda _: None,
+        )
+
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(exchanges, [])
+        self.assertEqual(
+            synthesizer.inputs,
+            ["好きな色は、青って覚えたよ。"],
+        )
+
     def test_empty_transcript_skips_reply_speech_and_playback(self) -> None:
         with TemporaryDirectory() as directory:
             logs: list[str] = []

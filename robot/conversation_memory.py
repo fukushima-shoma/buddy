@@ -90,16 +90,3 @@ class ConversationMemoryStore:
             encoding="utf-8",
         )
         temporary.replace(self.path)
-
-
-def format_conversation_memory(entries: list[dict[str, str]]) -> str:
-    if not entries:
-        return ""
-    lines = [
-        "以下は過去の会話の記録です。現在の発話に関係するときだけ参考にし、",
-        "古い内容を現在も正しいと決めつけず、個人情報を追加で尋ねないでください。",
-    ]
-    for entry in entries:
-        lines.append(f"子ども: {entry['user']}")
-        lines.append(f"Buddy: {entry['assistant']}")
-    return "\n".join(lines)
