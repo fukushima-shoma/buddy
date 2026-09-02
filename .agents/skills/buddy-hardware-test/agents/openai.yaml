@@ -1,0 +1,3 @@
+interface:
+  display_name: "Buddy Hardware Test"
+  short_description: "Test Buddy hardware in a safe staged order"

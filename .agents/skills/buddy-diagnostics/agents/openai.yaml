@@ -1,0 +1,3 @@
+interface:
+  display_name: "Buddy Diagnostics"
+  short_description: "Collect read-only Buddy health diagnostics"

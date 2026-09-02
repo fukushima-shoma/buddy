@@ -1,4 +1,5 @@
 captures/
+/*.wav
 models/person_detection/
 models/wakeword/
 data/buddy-memory.json

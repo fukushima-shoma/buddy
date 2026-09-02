@@ -1,0 +1,3 @@
+interface:
+  display_name: "Buddy Calibration"
+  short_description: "Measure and document Buddy calibration values"

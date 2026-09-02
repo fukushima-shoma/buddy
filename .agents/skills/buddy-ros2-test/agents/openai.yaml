@@ -1,0 +1,3 @@
+interface:
+  display_name: "Buddy ROS 2 Test"
+  short_description: "Run safe Buddy ROS 2 integration checks"
