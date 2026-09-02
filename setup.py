@@ -30,6 +30,7 @@ setup(
             "odometry_node = buddy_ros.odometry_node:main",
             "person_node = buddy_ros.person_node:main",
             "power_node = buddy_ros.power_node:main",
+            "reaction_node = buddy_ros.reaction_node:main",
         ],
     },
 )

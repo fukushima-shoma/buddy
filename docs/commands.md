@@ -357,6 +357,15 @@ ROS 2環境で会話状態とリアクションを公開する場合は次を追
 `/conversation/state`と`/conversation/reaction`は最新値を`std_msgs/msg/String`で配信する。
 `/conversation/event`は`phase`、`reaction`、`reason`を含むJSONを配信する。いずれも
 Reliable・Transient Local・depth 1で、後から起動したLEDや画面ノードも最新状態を取得できる。
+`buddy_follow.launch.py`の`reaction_node`は`/conversation/event`を受け、機器に依存しない
+表情・ライト・効果音の指示を`/reaction/command`へJSONで配信する。実機を動かさず確認するには
+別の端末で次を実行する。
+
+```sh
+ros2 topic echo /reaction/command std_msgs/msg/String
+```
+
+この段階では指示の配信だけで、LED、画面、スピーカーの操作は行わない。
 
 ### ラズパイ起動時にBuddyも自動起動する
 
