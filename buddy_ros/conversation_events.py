@@ -75,6 +75,8 @@ class Ros2ConversationEventSink:
         self._publisher = ConversationEventPublisher(self._node, String, qos)
 
     def __call__(self, event: ConversationEvent) -> None:
+        if not self._rclpy.ok():
+            return
         self._publisher.publish(event)
         self._rclpy.spin_once(self._node, timeout_sec=0.0)
 
