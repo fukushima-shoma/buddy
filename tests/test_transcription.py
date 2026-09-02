@@ -14,6 +14,7 @@ from robot.transcription import (
     MockTranscriber,
     OpenAITranscriber,
     is_unreliable_child_transcript,
+    is_unreliable_transcript,
 )
 
 
@@ -78,6 +79,13 @@ class TranscriptionTest(unittest.TestCase):
         self.assertTrue(is_unreliable_child_transcript("……"))
         self.assertFalse(is_unreliable_child_transcript("あか"))
         self.assertFalse(is_unreliable_child_transcript("でんしゃがすき"))
+
+    def test_general_transcript_filter_is_conservative(self) -> None:
+        self.assertTrue(is_unreliable_transcript("字幕提供：……"))
+        self.assertTrue(is_unreliable_transcript("……"))
+        self.assertTrue(is_unreliable_transcript("あ" * 201))
+        self.assertFalse(is_unreliable_transcript("今日はいい天気だね"))
+        self.assertFalse(is_unreliable_transcript("ついてきて"))
 
     def test_cli_defaults_do_not_call_openai_or_audio_hardware(self) -> None:
         file_args = build_parser().parse_args(["file", "speech.wav"])

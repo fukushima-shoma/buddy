@@ -74,12 +74,16 @@ from robot.transcription import (
     DEFAULT_TRANSCRIPTION_MODEL,
     Transcriber,
     is_unreliable_child_transcript,
+    is_unreliable_transcript,
 )
 
 
 CHILD_RETRY_REPLIES = (
     "ごめんね、よく聞こえなかったよ。もう一度、ゆっくり話してくれる？",
     "うまく聞き取れないみたい。近くの大人と一緒に、もう一度試してね。",
+)
+DEFAULT_RETRY_REPLIES = (
+    "ごめんね、うまく聞き取れなかったよ。もう一度言ってくれる？",
 )
 DEFAULT_MAX_SILENCE_TURNS = 2
 
@@ -767,7 +771,9 @@ def main() -> int:
             language=args.language,
             turns=args.turns,
             pause=args.pause,
-            retry_replies=CHILD_RETRY_REPLIES if args.child_mode else (),
+            retry_replies=(
+                CHILD_RETRY_REPLIES if args.child_mode else DEFAULT_RETRY_REPLIES
+            ),
             max_silence_turns=args.max_silence_turns,
             on_exchange=remember_exchange,
             start_mobility=None if mobility is None else mobility.start,
@@ -783,7 +789,9 @@ def main() -> int:
                 None if child_game is None else lambda: child_game.active
             ),
             reject_transcript=(
-                is_unreliable_child_transcript if args.child_mode else None
+                is_unreliable_child_transcript
+                if args.child_mode
+                else is_unreliable_transcript
             ),
             catch_interrupt=catch_interrupt,
         )

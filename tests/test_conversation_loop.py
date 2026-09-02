@@ -7,6 +7,7 @@ from robot.child_games import ChildGameController
 from robot.conversation import MockReplyGenerator
 from robot.conversation_loop_cli import (
     CHILD_RETRY_REPLIES,
+    DEFAULT_RETRY_REPLIES,
     DEFAULT_FAREWELL_REPLY,
     DEFAULT_INACTIVITY_REPLY,
     MOBILITY_CANCEL_REPLY,
@@ -26,7 +27,11 @@ from robot.conversation_loop_cli import (
     run_conversation_loop,
 )
 from robot.speech import MockSpeechSynthesizer
-from robot.transcription import MockTranscriber, is_unreliable_child_transcript
+from robot.transcription import (
+    MockTranscriber,
+    is_unreliable_child_transcript,
+    is_unreliable_transcript,
+)
 
 
 class InterruptingRecorder(MockAudioRecorder):
@@ -829,6 +834,31 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertTrue(
                 any("reason=uncertain-transcript" in log for log in logs)
             )
+
+    def test_default_retry_reply_handles_uncertain_transcript(self) -> None:
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("……"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            retry_replies=DEFAULT_RETRY_REPLIES,
+            reject_transcript=is_unreliable_transcript,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(synthesizer.inputs, [DEFAULT_RETRY_REPLIES[0]])
 
 
 if __name__ == "__main__":

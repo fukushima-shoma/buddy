@@ -21,15 +21,20 @@ _UNRELIABLE_TRANSCRIPTION_PHRASES = (
 )
 
 
-def is_unreliable_child_transcript(text: str) -> bool:
+def is_unreliable_transcript(text: str) -> bool:
     compact = "".join(text.split())
     if not compact:
         return True
-    if len(compact) > 80:
+    if len(compact) > 200:
         return True
     if any(phrase in compact for phrase in _UNRELIABLE_TRANSCRIPTION_PHRASES):
         return True
     return re.search(r"[ぁ-んァ-ヶ一-龠A-Za-z0-9]", compact) is None
+
+
+def is_unreliable_child_transcript(text: str) -> bool:
+    compact = "".join(text.split())
+    return len(compact) > 80 or is_unreliable_transcript(text)
 
 
 class Transcriber(Protocol):
