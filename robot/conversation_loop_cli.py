@@ -11,7 +11,7 @@ from robot.audio import (
     AudioPlayer,
     AudioRecorder,
     NoSpeechDetectedError,
-    generate_tone_sequence,
+    generate_engine_rev,
 )
 from robot.audio_cli import create_player, create_recorder
 from robot.child_games import ChildGameController, is_game_end_transcript
@@ -978,12 +978,10 @@ def main() -> int:
     reset_context = getattr(reply_generator, "reset_context", None)
     wake_chime: Path | None = None
     if args.start_trigger == "wakeword":
-        wake_chime = generate_tone_sequence(
-            Path("captures/audio/wake-chime.wav"),
-            frequencies=(660, 990),
-            tone_duration=0.11,
-            gap_duration=0.025,
-            volume=0.22,
+        wake_chime = generate_engine_rev(
+            Path("captures/audio/wake-engine.wav"),
+            duration=0.38,
+            volume=0.18,
         )
 
     def prepare_session() -> None:

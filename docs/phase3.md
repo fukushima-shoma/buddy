@@ -321,7 +321,7 @@ python -m robot.conversation_loop_cli \
 
 `--start-trigger wakeword`では、VoskがEMEETの16kHzモノラル音声を
 Raspberry Pi内で処理し、「ねえ、バディ」を検出した場合だけ会話状態へ移る。
-検出時はBuddyらしい短い二音チャイムと`curious`リアクションを即座に返してから、
+検出時はBuddyらしい短いエンジン始動風サウンドと`curious`リアクションを即座に返してから、
 マイクを会話録音へ引き渡す。指定ターン後は再び
 ウェイクワード待機へ戻る。待機中の音声はWAVへ保存せずOpenAI APIにも送信しない。
 「バイバイ」で会話を終了した後も同じ待機状態になり、「ねえ、バディ」と一致する

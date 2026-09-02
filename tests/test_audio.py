@@ -15,6 +15,7 @@ from robot.audio import (
     MockAudioPlayer,
     MockAudioRecorder,
     NoSpeechDetectedError,
+    generate_engine_rev,
     generate_tone,
     generate_tone_sequence,
     inspect_wav,
@@ -108,6 +109,16 @@ class AudioTest(unittest.TestCase):
 
             self.assertEqual(info.frames, 1760)
             self.assertAlmostEqual(info.duration, 0.22)
+
+    def test_generates_short_engine_acknowledgement(self) -> None:
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "engine.wav"
+            generate_engine_rev(output, duration=0.38, sample_rate=8000)
+
+            info = inspect_wav(output)
+
+            self.assertEqual(info.frames, 3040)
+            self.assertAlmostEqual(info.duration, 0.38)
 
     def test_mock_recorder_creates_silent_wav(self) -> None:
         with TemporaryDirectory() as directory:

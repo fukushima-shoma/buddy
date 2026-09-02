@@ -139,6 +139,32 @@ def generate_tone_sequence(
     return _write_mono_pcm16(output, sample_rate, samples)
 
 
+def generate_engine_rev(
+    output: Path,
+    *,
+    duration: float = 0.38,
+    sample_rate: int = 16000,
+    volume: float = 0.18,
+) -> Path:
+    """Generate a short, friendly engine-start cue without recorded audio."""
+    sample_rate = max(1, sample_rate)
+    frame_count = max(1, round(max(0.1, duration) * sample_rate))
+    amplitude = 32767 * min(1.0, max(0.0, volume))
+    fade_frames = max(1, round(0.03 * sample_rate))
+    phase = 0.0
+    samples: list[int] = []
+    for frame in range(frame_count):
+        progress = frame / max(1, frame_count - 1)
+        frequency = 85 + 105 * progress + 12 * math.sin(2 * math.pi * 7 * progress)
+        phase += 2 * math.pi * frequency / sample_rate
+        fade_in = min(1.0, frame / fade_frames)
+        fade_out = min(1.0, (frame_count - frame - 1) / fade_frames)
+        envelope = min(fade_in, fade_out) * (0.78 + 0.22 * math.sin(phase * 0.23))
+        engine_wave = math.sin(phase) + 0.45 * math.sin(phase * 2)
+        samples.append(round(amplitude * envelope * engine_wave / 1.45))
+    return _write_mono_pcm16(output, sample_rate, samples)
+
+
 def inspect_wav(source: Path) -> WavInfo:
     with wave.open(str(source.expanduser()), "rb") as wav_file:
         return WavInfo(
