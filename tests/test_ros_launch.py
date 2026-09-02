@@ -18,6 +18,7 @@ class RosLaunchTest(unittest.TestCase):
         self.assertIn('executable="power_node"', source)
         self.assertIn('executable="follow_node"', source)
         self.assertIn('executable="reaction_node"', source)
+        self.assertIn('executable="reaction_output_node"', source)
         self.assertIn('"require_power_status": True', source)
 
 

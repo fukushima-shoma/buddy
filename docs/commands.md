@@ -366,6 +366,9 @@ ros2 topic echo /reaction/command std_msgs/msg/String
 ```
 
 この段階では指示の配信だけで、LED、画面、スピーカーの操作は行わない。
+同じlaunchで起動する`reaction_output_node`は、モック表情をROSログへ表示する。
+例えば`happy`なら`(≧▽≦)`、`confused`なら`(・_・?)`となり、ライトと効果音の
+指示も同じ行で確認できる。実機用の表示・LED・効果音ドライバーはまだ呼び出さない。
 
 ### ラズパイ起動時にBuddyも自動起動する
 

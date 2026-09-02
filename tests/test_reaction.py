@@ -53,6 +53,19 @@ class ReactionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             conversation_event_from_json('{"phase":"unknown"}')
 
+    def test_command_json_round_trip_and_validation(self) -> None:
+        command = reaction_command_for(
+            ConversationEvent(
+                ConversationPhase.SPEAKING,
+                ConversationReaction.WARM,
+                "reply",
+            )
+        )
+
+        self.assertEqual(type(command).from_json(command.to_json()), command)
+        with self.assertRaises(ValueError):
+            type(command).from_json('{"expression":"smile"}')
+
 
 if __name__ == "__main__":
     unittest.main()

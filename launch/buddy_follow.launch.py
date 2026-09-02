@@ -87,6 +87,12 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="buddy_robot",
+                executable="reaction_output_node",
+                name="buddy_reaction_output",
+                output="screen",
+            ),
+            Node(
+                package="buddy_robot",
                 executable="follow_node",
                 name="buddy_follow",
                 output="screen",
