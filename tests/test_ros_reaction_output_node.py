@@ -20,6 +20,7 @@ class FakeLogger:
 class FakeNode:
     def __init__(self) -> None:
         self.callback = None
+        self.timer_callback = None
         self.logger = FakeLogger()
 
     def create_subscription(self, *args: object) -> object:
@@ -28,6 +29,10 @@ class FakeNode:
 
     def get_logger(self) -> FakeLogger:
         return self.logger
+
+    def create_timer(self, period: float, callback: object) -> object:
+        self.timer_callback = callback
+        return object()
 
 
 class RosReactionOutputNodeTest(unittest.TestCase):

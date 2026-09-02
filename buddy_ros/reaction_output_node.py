@@ -32,6 +32,7 @@ class ReactionOutputSubscriber:
             self._on_command,
             qos_profile,
         )
+        self._timer = node.create_timer(0.05, controller.tick)
 
     def _on_command(self, message: Any) -> None:
         try:

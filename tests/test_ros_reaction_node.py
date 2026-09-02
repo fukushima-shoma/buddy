@@ -61,6 +61,8 @@ class RosReactionNodeTest(unittest.TestCase):
                 "expression": "alert",
                 "light_animation": "blink",
                 "light_color": "red",
+                "minimum_duration_ms": 1200,
+                "priority": 100,
                 "sound_cue": "warning",
             },
         )

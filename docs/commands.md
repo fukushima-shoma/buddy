@@ -369,6 +369,8 @@ ros2 topic echo /reaction/command std_msgs/msg/String
 同じlaunchで起動する`reaction_output_node`は、モック表情をROSログへ表示する。
 例えば`happy`なら`(≧▽≦)`、`confused`なら`(・_・?)`となり、ライトと効果音の
 指示も同じ行で確認できる。実機用の表示・LED・効果音ドライバーはまだ呼び出さない。
+警戒などの高優先度表現は即座に割り込み、`minimum_duration_ms`の間は保持される。
+保持中に届いた通常表情はブロックせずに保留され、ROSタイマーで自動的に切り替わる。
 
 ### ラズパイ起動時にBuddyも自動起動する
 
