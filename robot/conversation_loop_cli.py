@@ -37,6 +37,7 @@ from robot.conversation_intents import (
     MOBILITY_START_REPLY,
     MOBILITY_STOP_REPLY,
     MOBILITY_UNAVAILABLE_REPLY,
+    NOTHING_TO_REPEAT_REPLY,
     POWER_GOOD_REPLY,
     POWER_LOW_REPLY,
     POWER_UNAVAILABLE_REPLY,
@@ -47,6 +48,7 @@ from robot.conversation_intents import (
     is_mobility_start_transcript,
     is_mobility_stop_transcript,
     is_power_status_transcript,
+    is_repeat_reply_transcript,
 )
 from robot.interaction import (
     DEFAULT_CONVERSATION_BUTTON_PIN,
@@ -84,6 +86,8 @@ CHILD_RETRY_REPLIES = (
 )
 DEFAULT_RETRY_REPLIES = (
     "ごめんね、うまく聞き取れなかったよ。もう一度言ってくれる？",
+    "あれ、聞き逃しちゃった。もう一回お願いしてもいい？",
+    "ゆっくりで大丈夫だよ。もう一度聞かせてね。",
 )
 DEFAULT_MAX_SILENCE_TURNS = 2
 
@@ -322,8 +326,11 @@ def run_conversation_loop(
     recognition_failures = 0
     consecutive_silences = 0
     mobility_confirmation_pending = False
+    last_spoken_source: Path | None = None
 
     def play_with_stop_interrupt(source: Path, turn: int) -> None:
+        nonlocal last_spoken_source
+        last_spoken_source = source
         player.play(source)
         consume_stop = getattr(player, "consume_stop_request", None)
         if not callable(consume_stop) or not consume_stop():
@@ -464,6 +471,29 @@ def run_conversation_loop(
                 continue
 
             recognition_failures = 0
+            if is_repeat_reply_transcript(transcript):
+                if last_spoken_source is not None:
+                    output(
+                        f"turn={turn} repeated={last_spoken_source} "
+                        "reason=repeat-request"
+                    )
+                    play_with_stop_interrupt(last_spoken_source, turn)
+                    output(f"turn={turn} played={last_spoken_source}")
+                else:
+                    output(
+                        f"turn={turn} reply={NOTHING_TO_REPEAT_REPLY} "
+                        "reason=nothing-to-repeat"
+                    )
+                    generated = synthesizer.synthesize(
+                        NOTHING_TO_REPEAT_REPLY,
+                        speech_output,
+                    )
+                    output(f"turn={turn} synthesized={generated}")
+                    play_with_stop_interrupt(generated, turn)
+                    output(f"turn={turn} played={generated}")
+                completed_turns += 1
+                continue
+
             if mobility_confirmation_pending:
                 if is_mobility_cancel_transcript(transcript):
                     mobility_confirmation_pending = False

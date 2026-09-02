@@ -20,6 +20,7 @@ from robot.conversation_loop_cli import (
     MOBILITY_FAREWELL_REPLY,
     POWER_GOOD_REPLY,
     POWER_LOW_REPLY,
+    NOTHING_TO_REPEAT_REPLY,
     build_parser,
     is_farewell_transcript,
     is_mobility_start_transcript,
@@ -159,6 +160,54 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(len(player.played), 2)
             self.assertEqual(pauses, [0.25])
             self.assertIn("turn=2 reply=返事", logs)
+
+    def test_repeat_request_replays_previous_audio_without_api_calls(self) -> None:
+        reply_generator = MockReplyGenerator("やさしい返事")
+        synthesizer = MockSpeechSynthesizer()
+        player = MockAudioPlayer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=SequenceTranscriber("お話しして", "もう一回言って"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=player,
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=2,
+            pause=0,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(reply_generator.inputs, ["お話しして"])
+        self.assertEqual(synthesizer.inputs, ["やさしい返事"])
+        self.assertEqual(player.played, [Path("reply.wav"), Path("reply.wav")])
+
+    def test_repeat_request_before_first_reply_explains_it_cannot_repeat(self) -> None:
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("もう一回言って"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            output=lambda _: None,
+        )
+
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(synthesizer.inputs, [NOTHING_TO_REPEAT_REPLY])
 
     def test_successful_exchange_is_sent_to_persistent_memory_callback(self) -> None:
         exchanges: list[tuple[str, str]] = []

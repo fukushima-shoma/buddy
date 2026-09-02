@@ -8,6 +8,7 @@ from robot.conversation_intents import (
     is_mobility_start_transcript,
     is_mobility_stop_transcript,
     is_power_status_transcript,
+    is_repeat_reply_transcript,
     normalize_exact_phrase,
 )
 
@@ -30,6 +31,11 @@ class ConversationIntentsTest(unittest.TestCase):
         self.assertTrue(is_ambiguous_mobility_transcript("進んで。"))
         self.assertFalse(is_mobility_confirm_transcript("はいって言った"))
         self.assertFalse(is_ambiguous_mobility_transcript("前に進んでいるね"))
+
+    def test_repeat_request_requires_an_exact_phrase(self) -> None:
+        self.assertTrue(is_repeat_reply_transcript("もう一回言って！"))
+        self.assertTrue(is_repeat_reply_transcript("なんて言った？"))
+        self.assertFalse(is_repeat_reply_transcript("もう一回言ってと頼んだ"))
 
 
 if __name__ == "__main__":

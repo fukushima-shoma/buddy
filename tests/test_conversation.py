@@ -58,6 +58,8 @@ class ConversationTest(unittest.TestCase):
 
     def test_prompt_contains_child_safety_boundaries(self) -> None:
         self.assertIn("AI", BUDDY_INSTRUCTIONS)
+        self.assertIn("やさしい友だち", BUDDY_INSTRUCTIONS)
+        self.assertIn("一緒に考え", BUDDY_INSTRUCTIONS)
         self.assertIn("個人情報", BUDDY_INSTRUCTIONS)
         self.assertIn("信頼できる大人", BUDDY_INSTRUCTIONS)
 
@@ -71,6 +73,7 @@ class ConversationTest(unittest.TestCase):
         self.assertIn("個人情報", instructions)
         self.assertIn("秘密", instructions)
         self.assertIn("信頼できる大人", instructions)
+        self.assertIn("やさしい友だち", instructions)
 
     def test_session_context_passes_previous_response_id(self) -> None:
         responses = FakeResponses()

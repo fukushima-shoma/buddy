@@ -28,6 +28,9 @@ AMBIGUOUS_MOBILITY_PHRASES = frozenset(
 POWER_STATUS_PHRASES = frozenset(
     {"電池大丈夫", "電池は大丈夫", "バッテリー大丈夫", "バッテリーは大丈夫"}
 )
+REPEAT_REPLY_PHRASES = frozenset(
+    {"もう一回言って", "もう一度言って", "もう一回", "もう一度", "なんて言った"}
+)
 
 DEFAULT_FAREWELL_REPLY = "バイバイ。またお話ししようね。"
 DEFAULT_INACTIVITY_REPLY = "お話はおしまいかな。またお話ししようね。"
@@ -44,6 +47,7 @@ MOBILITY_UNAVAILABLE_REPLY = "ごめんね、今は動けないよ。"
 POWER_LOW_REPLY = "電源が弱くなっているから、安全のために止まるね。"
 POWER_GOOD_REPLY = "電源は大丈夫だよ。"
 POWER_UNAVAILABLE_REPLY = "電源を確認できないから、安全のために動かないね。"
+NOTHING_TO_REPEAT_REPLY = "まだ繰り返せるお話がないよ。"
 
 
 def normalize_exact_phrase(transcript: str) -> str:
@@ -85,3 +89,7 @@ def is_ambiguous_mobility_transcript(transcript: str) -> bool:
 
 def is_power_status_transcript(transcript: str) -> bool:
     return _matches(transcript, POWER_STATUS_PHRASES)
+
+
+def is_repeat_reply_transcript(transcript: str) -> bool:
+    return _matches(transcript, REPEAT_REPLY_PHRASES)
