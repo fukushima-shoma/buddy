@@ -37,3 +37,32 @@ class SpokenProfileMemoryTest(unittest.TestCase):
 
             self.assertIsNone(memory.handle(f"好きな色は{'青' * 21}"))
             self.assertEqual(store.load(), {})
+
+    def test_birthday_month_and_day_are_saved_recalled_and_deleted(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = ParentManagedMemory(Path(directory) / "profile.json")
+            memory = SpokenProfileMemory(store)
+
+            self.assertEqual(
+                memory.handle("ぼくの誕生日は４月３日だよ"),
+                "誕生日は、4月3日って覚えたよ。",
+            )
+            self.assertEqual(store.load(), {"誕生日": "4月3日"})
+            self.assertEqual(memory.handle("誕生日はいつ？"), "誕生日は、4月3日だよ。")
+            self.assertEqual(memory.handle("誕生日を忘れて"), "誕生日は忘れたよ。")
+            self.assertEqual(store.load(), {})
+
+    def test_birthday_rejects_year_and_impossible_dates(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = ParentManagedMemory(Path(directory) / "profile.json")
+            memory = SpokenProfileMemory(store)
+
+            self.assertEqual(
+                memory.handle("誕生日は2022年4月3日"),
+                "誕生日は、何月何日かを教えてね。",
+            )
+            self.assertEqual(
+                memory.handle("誕生日は2月30日"),
+                "誕生日は、何月何日かを教えてね。",
+            )
+            self.assertEqual(store.load(), {})

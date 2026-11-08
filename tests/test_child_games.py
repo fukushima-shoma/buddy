@@ -23,3 +23,10 @@ class ChildGamesTest(unittest.TestCase):
 
         self.assertIsNone(game.handle("今日は何して遊ぶ？"))
         self.assertTrue(is_game_end_transcript("ゲーム、おしまい。"))
+
+    def test_story_request_leaves_quiz_instead_of_being_marked_wrong(self) -> None:
+        game = ChildGameController()
+        game.handle("どうぶつクイズ")
+        self.assertTrue(game.active)
+        self.assertIsNone(game.handle("車のお話を聞かせて"))
+        self.assertFalse(game.active)

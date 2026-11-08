@@ -12,23 +12,39 @@ WorkingDirectory=/home/shofukus/buddy
 EnvironmentFile=/home/shofukus/buddy/.env
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/shofukus/buddy/scripts/run_buddy_conversation_ros2.sh \
+  --conversation-backend realtime \
+  --realtime-model gpt-realtime-2.1 \
+  --realtime-turn-detection semantic \
+  --semantic-eagerness medium \
+  --empty-commit-grace 1.0 \
+  --sample-rate 24000 \
+  --duration 20 \
   --audio-backend alsa-vad \
   --audio-device plughw:CARD=Plus,DEV=0 \
-  --silence-duration 0.55 \
+  --silence-duration 1.4 \
   --transcription-backend openai \
   --reply-backend openai \
+  --reply-model gpt-5.6-luna \
+  --reply-reasoning-effort none \
   --child-mode \
   --child-games \
-  --memory session \
+  --local-short-replies \
+  --memory persistent \
   --memory-turns 30 \
   --auto-conversation-memory \
+  --shared-experience-memory \
   --conversation-events ros2 \
+  --conversation-display \
+  --conversation-display-host 0.0.0.0 \
+  --conversation-display-port 8765 \
   --mobility-backend ros2-follow \
   --mobility-stop-distance 60 \
   --mobility-resume-distance 70 \
   --power-monitor raspberry-pi \
   --speech-backend openai \
   --speech-style calm \
+  --speech-speed 0.95 \
+  --fixed-speech-cache /home/shofukus/buddy/captures/audio/fixed-speech-cache \
   --playback-backend alsa-interruptible \
   --playback-device plughw:CARD=Plus,DEV=0 \
   --turns 0 \

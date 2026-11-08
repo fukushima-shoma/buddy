@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import unicodedata
+
+from robot.buddy_identity import BUDDY_FAREWELL_REPLY, BUDDY_INACTIVITY_REPLY
 
 
 FAREWELL_PHRASES = frozenset(
@@ -32,8 +35,17 @@ REPEAT_REPLY_PHRASES = frozenset(
     {"もう一回言って", "もう一度言って", "もう一回", "もう一度", "なんて言った"}
 )
 
-DEFAULT_FAREWELL_REPLY = "バイバイ。またお話ししようね。"
-DEFAULT_INACTIVITY_REPLY = "お話はおしまいかな。またお話ししようね。"
+CHILD_RETRY_REPLIES = (
+    "ごめんね、よく聞こえなかったよ。もう一度、ゆっくり話してくれる？",
+    "うまく聞き取れないみたい。近くの大人と一緒に、もう一度試してね。",
+)
+DEFAULT_RETRY_REPLIES = (
+    "ごめんね、うまく聞き取れなかったよ。もう一度言ってくれる？",
+    "あれ、聞き逃しちゃった。もう一回お願いしてもいい？",
+    "ゆっくりで大丈夫だよ。もう一度聞かせてね。",
+)
+DEFAULT_FAREWELL_REPLY = BUDDY_FAREWELL_REPLY
+DEFAULT_INACTIVITY_REPLY = BUDDY_INACTIVITY_REPLY
 MOBILITY_START_REPLY = "いまから、ついていくね。動き始めるよ。"
 MOBILITY_CONFIRM_REPLY = "ついていってもいい？ いいときは、はい、と言ってね。"
 MOBILITY_CONFIRM_AGAIN_REPLY = "ついていってもいい？ はい、か、やめる、で教えてね。"
@@ -42,12 +54,92 @@ MOBILITY_CLARIFY_REPLY = "どう動いたらいいかわからないから、い
 MOBILITY_ALREADY_RUNNING_REPLY = "もう、ついていっているよ。"
 MOBILITY_STOP_REPLY = "止まったよ。もう動かないよ。"
 MOBILITY_ALREADY_STOPPED_REPLY = "いまは止まっているよ。"
-MOBILITY_FAREWELL_REPLY = "止まったよ。バイバイ。またお話ししようね。"
+MOBILITY_FAREWELL_REPLY = (
+    "止まったよ。バイバイ、ぼくのタイヤもひと休みするね。"
+)
 MOBILITY_UNAVAILABLE_REPLY = "ごめんね、今は動けないよ。"
 POWER_LOW_REPLY = "電源が弱くなっているから、安全のために止まるね。"
 POWER_GOOD_REPLY = "電源は大丈夫だよ。"
 POWER_UNAVAILABLE_REPLY = "電源を確認できないから、安全のために動かないね。"
 NOTHING_TO_REPEAT_REPLY = "まだ繰り返せるお話がないよ。"
+
+LOCAL_SHORT_REPLY_PHRASES = {
+    "greeting": frozenset({"こんにちは", "おはよう", "こんばんは", "やあ"}),
+    "thanks": frozenset({"ありがとう", "ありがと", "どうも"}),
+    "correction": frozenset({"ちがう", "違う", "ちがうよ", "そうじゃない"}),
+    "uncertain": frozenset(
+        {"わからない", "わかんない", "わかんないよ", "知らない", "しらない"}
+    ),
+    "change-play": frozenset(
+        {"別の遊び", "べつの遊び", "ほかの遊び", "他の遊び", "違う遊び"}
+    ),
+    "success": frozenset({"できた", "できたよ", "やった", "やったよ"}),
+    "fun": frozenset(
+        {"楽しい", "たのしい", "楽しいね", "おもしろい", "面白い"}
+    ),
+}
+
+LOCAL_SHORT_REPLIES = {
+    "greeting": (
+        "こんにちは。ぼくはBuddyだよ。",
+        "やあ。ぼくのタイヤも起きたよ。",
+        "こんにちは。今日も話せてうれしいな。",
+    ),
+    "thanks": (
+        "どういたしまして。ぼくもうれしいよ。",
+        "えへへ、ありがとう。",
+        "ありがとう。タイヤが弾む気分だよ。",
+    ),
+    "correction": (
+        "そっか、ちがったね。教えてくれてありがとう。",
+        "わかったよ。ちゃんと直すね。",
+        "了解。ぼくのタイヤも向きを変えるね。",
+    ),
+    "uncertain": (
+        "だいじょうぶ。いっしょに考えよう。",
+        "わからなくても平気だよ。",
+        "ぼくも考えるよ。ゆっくりでいいよ。",
+    ),
+    "change-play": (
+        "いいよ。こんどは何して遊ぶ？",
+        "切り替えよう。どの遊びにする？",
+        "オーケー。ぼくのタイヤも気分転換。",
+    ),
+    "success": (
+        "できたんだね。やったあ。",
+        "すごい。ぼくもくるんと喜んだよ。",
+        "やったね。ぼくもうれしいよ。",
+    ),
+    "fun": (
+        "楽しいね。ぼくのタイヤも弾みそう。",
+        "おもしろいね。もっと聞きたいな。",
+        "ぼくも楽しくなってきたよ。",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class LocalShortReply:
+    intent: str
+    text: str
+
+
+class LocalShortReplyController:
+    """Handle safe exact short phrases without waiting for a reply model."""
+
+    def __init__(self) -> None:
+        self._next_by_intent: dict[str, int] = {}
+
+    def reply(self, transcript: str) -> LocalShortReply | None:
+        normalized = normalize_exact_phrase(transcript)
+        for intent, phrases in LOCAL_SHORT_REPLY_PHRASES.items():
+            if normalized not in phrases:
+                continue
+            choices = LOCAL_SHORT_REPLIES[intent]
+            index = self._next_by_intent.get(intent, 0)
+            self._next_by_intent[intent] = (index + 1) % len(choices)
+            return LocalShortReply(intent, choices[index])
+        return None
 
 
 def normalize_exact_phrase(transcript: str) -> str:

@@ -9,6 +9,7 @@ from robot.conversation import DEFAULT_REPLY_MODEL
 from robot.reply_cli import create_reply_generator
 from robot.speech import (
     DEFAULT_SPEECH_MODEL,
+    DEFAULT_SPEECH_SPEED,
     DEFAULT_SPEECH_STYLE,
     DEFAULT_SPEECH_VOICE,
     SPEECH_STYLES,
@@ -61,6 +62,7 @@ def add_transcription_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--speech-style", choices=SPEECH_STYLES, default=DEFAULT_SPEECH_STYLE
     )
+    parser.add_argument("--speech-speed", type=float, default=DEFAULT_SPEECH_SPEED)
     parser.add_argument(
         "--speech-output",
         type=Path,
@@ -160,11 +162,13 @@ def main() -> int:
                 model=args.speech_model,
                 voice=args.speech_voice,
                 style=args.speech_style,
+                speed=args.speech_speed,
             )
             speech_output = synthesizer.synthesize(reply, args.speech_output)
             print(
                 f"synthesized={speech_output} backend={args.speech_backend} "
-                f"voice={args.speech_voice} style={args.speech_style}"
+                f"voice={args.speech_voice} style={args.speech_style} "
+                f"speed={args.speech_speed}"
             )
             if args.playback_backend != "none":
                 create_player(args.playback_backend, args.playback_device).play(

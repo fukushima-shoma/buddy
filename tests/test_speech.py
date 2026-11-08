@@ -1,11 +1,13 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from types import SimpleNamespace
 
 from robot.audio import inspect_wav
 from robot.speech import (
     DEFAULT_SPEECH_INSTRUCTIONS,
     DEFAULT_SPEECH_MODEL,
+    DEFAULT_SPEECH_SPEED,
     DEFAULT_SPEECH_STYLE,
     DEFAULT_SPEECH_VOICE,
     MockSpeechSynthesizer,
@@ -30,6 +32,11 @@ class FakeSpeechResponse:
     def stream_to_file(self, output: Path) -> None:
         self.output = output
         output.write_bytes(self.audio)
+
+    def iter_bytes(self, chunk_size: int | None = None):
+        size = chunk_size or len(self.audio)
+        for offset in range(0, len(self.audio), size):
+            yield self.audio[offset : offset + size]
 
 
 class FakeStreamingSpeech:
@@ -90,9 +97,73 @@ class SpeechTest(unittest.TestCase):
                         "input": "おはよう",
                         "instructions": DEFAULT_SPEECH_INSTRUCTIONS,
                         "response_format": "wav",
+                        "speed": DEFAULT_SPEECH_SPEED,
                     }
                 ],
             )
+
+    def test_audio_cache_restores_overwritten_output_and_separates_voice(self) -> None:
+        streaming = FakeStreamingSpeech()
+        client = SimpleNamespace(
+            audio=SimpleNamespace(
+                speech=SimpleNamespace(with_streaming_response=streaming)
+            )
+        )
+        synth = OpenAISpeechSynthesizer(client=client)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "reply.wav"
+            synth.synthesize("こんにちは", path)
+            self.assertFalse(synth.last_cache_hit)
+            path.write_bytes(b"overwritten")
+            synth.synthesize("こんにちは", path)
+            self.assertTrue(synth.last_cache_hit)
+            self.assertEqual(path.read_bytes(), b"RIFF-fake-wav")
+            self.assertEqual(len(streaming.calls), 1)
+            synth.voice = "different"
+            synth.synthesize("こんにちは", path)
+            self.assertFalse(synth.last_cache_hit)
+            self.assertEqual(len(streaming.calls), 2)
+
+    def test_openai_synthesizer_streams_and_saves_wav(self) -> None:
+        streaming = FakeStreamingSpeech()
+        streaming.response.audio = b"RIFF" + b"audio" * 5000
+        client = SimpleNamespace(
+            audio=SimpleNamespace(
+                speech=SimpleNamespace(with_streaming_response=streaming)
+            )
+        )
+        synth = OpenAISpeechSynthesizer(client=client)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "reply.wav"
+
+            chunks = list(synth.stream("こんにちは", path))
+
+            self.assertGreater(len(chunks), 1)
+            self.assertEqual(b"".join(chunks), streaming.response.audio)
+            self.assertEqual(path.read_bytes(), streaming.response.audio)
+            self.assertFalse(synth.last_cache_hit)
+
+            cached_chunks = list(synth.stream("こんにちは", path))
+            self.assertEqual(cached_chunks, [streaming.response.audio])
+            self.assertTrue(synth.last_cache_hit)
+            self.assertEqual(len(streaming.calls), 1)
+
+    def test_audio_cache_evicts_old_entries(self) -> None:
+        streaming = FakeStreamingSpeech()
+        client = SimpleNamespace(
+            audio=SimpleNamespace(
+                speech=SimpleNamespace(with_streaming_response=streaming)
+            )
+        )
+        synth = OpenAISpeechSynthesizer(client=client)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "reply.wav"
+            for number in range(33):
+                synth.synthesize(str(number), path)
+            synth.synthesize("32", path)
+            self.assertEqual(len(streaming.calls), 33)
+            synth.synthesize("0", path)
+            self.assertEqual(len(streaming.calls), 34)
 
     def test_openai_synthesizer_rejects_empty_text(self) -> None:
         streaming = FakeStreamingSpeech()
@@ -125,13 +196,28 @@ class SpeechTest(unittest.TestCase):
         self.assertEqual(args.playback_backend, "none")
         self.assertEqual(args.voice, "coral")
         self.assertEqual(args.style, "calm")
+        self.assertEqual(args.speed, DEFAULT_SPEECH_SPEED)
 
     def test_default_calm_style_targets_a_gentle_youthful_voice(self) -> None:
         instructions = get_speech_instructions(DEFAULT_SPEECH_STYLE)
 
-        self.assertIn("若々しく優しい", instructions)
+        self.assertIn("幼さのある中性的な声色", instructions)
+        self.assertIn("リラックス", instructions)
+        self.assertIn("少し年上の子どもの友だち", instructions)
         self.assertIn("少しゆっくり", instructions)
-        self.assertIn("穏やかな抑揚", instructions)
+        self.assertIn("自然な抑揚", instructions)
+        self.assertIn("内容に合わせて声の表情を変えて", instructions)
+
+    def test_speech_speed_must_be_supported_by_the_api(self) -> None:
+        streaming = FakeStreamingSpeech()
+        client = SimpleNamespace(
+            audio=SimpleNamespace(
+                speech=SimpleNamespace(with_streaming_response=streaming)
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "between 0.25 and 4.0"):
+            OpenAISpeechSynthesizer(speed=0.1, client=client)
 
     def test_speech_styles_have_distinct_instructions(self) -> None:
         self.assertEqual(

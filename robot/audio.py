@@ -9,7 +9,8 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
-from typing import Any, Callable, Protocol, Sequence
+from threading import Thread
+from typing import Any, Callable, Iterable, Protocol, Sequence
 import unicodedata
 import wave
 
@@ -42,6 +43,16 @@ class AudioRecorder(Protocol):
 class AudioPlayer(Protocol):
     def play(self, source: Path) -> None:
         """Play a WAV file and return after playback finishes."""
+
+
+class StreamingAudioPlayer(Protocol):
+    def play_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        on_first_chunk: Callable[[], None] | None = None,
+    ) -> None:
+        """Play WAV bytes as they arrive and return after playback finishes."""
 
 
 class NoSpeechDetectedError(RuntimeError):
@@ -239,6 +250,7 @@ class AlsaVoiceActivatedRecorder:
         *,
         threshold: float = 500.0,
         silence_duration: float = 0.8,
+        semantic_silence_duration: float = 3.0,
         max_wait: float = 10.0,
         pre_roll: float = 0.3,
         chunk_duration: float = 0.1,
@@ -246,7 +258,10 @@ class AlsaVoiceActivatedRecorder:
     ) -> None:
         self.device = device
         self.threshold = max(0.0, threshold)
+        if not 0 < semantic_silence_duration <= 60:
+            raise ValueError("Semantic silence duration must be between 0 and 60 seconds.")
         self.silence_duration = max(0.1, silence_duration)
+        self.semantic_silence_duration = max(self.silence_duration, semantic_silence_duration)
         self.max_wait = max(0.1, max_wait)
         self.pre_roll = max(0.0, pre_roll)
         self.chunk_duration = max(0.02, chunk_duration)
@@ -258,6 +273,9 @@ class AlsaVoiceActivatedRecorder:
         *,
         duration: float,
         sample_rate: int,
+        on_chunk: Callable[[bytes], None] | None = None,
+        should_stop: Callable[[], bool | None] | None = None,
+        on_ready: Callable[[], None] | None = None,
     ) -> Path:
         sample_rate = max(1, sample_rate)
         duration = max(self.chunk_duration, duration)
@@ -267,6 +285,9 @@ class AlsaVoiceActivatedRecorder:
         record_chunks = max(1, math.ceil(duration / self.chunk_duration))
         trailing_chunks = max(
             1, math.ceil(self.silence_duration / self.chunk_duration)
+        )
+        semantic_trailing_chunks = max(
+            trailing_chunks, math.ceil(self.semantic_silence_duration / self.chunk_duration)
         )
         pre_roll_chunks = max(1, math.ceil(self.pre_roll / self.chunk_duration))
         buffered: deque[bytes] = deque(maxlen=pre_roll_chunks)
@@ -294,6 +315,10 @@ class AlsaVoiceActivatedRecorder:
         waited = 0
         after_start = 0
         silent = 0
+        ready_notified = False
+        self.last_stop_reason = "no-speech"
+        self.last_duration = 0.0
+        self.last_trailing_silence = 0.0
         try:
             if process.stdout is None:
                 raise RuntimeError("arecord did not provide an audio stream")
@@ -301,6 +326,10 @@ class AlsaVoiceActivatedRecorder:
                 chunk = process.stdout.read(chunk_bytes)
                 if len(chunk) != chunk_bytes:
                     raise RuntimeError("arecord stopped before recording completed")
+                if not ready_notified:
+                    ready_notified = True
+                    if on_ready is not None:
+                        on_ready()
                 level = pcm16_rms(chunk)
                 if not started:
                     buffered.append(chunk)
@@ -308,8 +337,12 @@ class AlsaVoiceActivatedRecorder:
                     if level >= self.threshold:
                         started = True
                         captured.extend(buffered)
+                        if on_chunk is not None:
+                            for buffered_chunk in buffered:
+                                on_chunk(buffered_chunk)
                         after_start = 1
                         if after_start >= record_chunks:
+                            self.last_stop_reason = "duration-limit"
                             break
                     elif waited >= wait_chunks:
                         raise NoSpeechDetectedError(
@@ -318,9 +351,24 @@ class AlsaVoiceActivatedRecorder:
                     continue
 
                 captured.append(chunk)
+                if on_chunk is not None:
+                    on_chunk(chunk)
                 after_start += 1
                 silent = silent + 1 if level < self.threshold else 0
-                if silent >= trailing_chunks or after_start >= record_chunks:
+                # False means the semantic detector is still waiting for words.
+                # None means unavailable: fall back to local silence detection.
+                decision = should_stop() if should_stop is not None else None
+                if decision is True:
+                    self.last_stop_reason = "semantic"
+                    break
+                if decision is None and silent >= trailing_chunks:
+                    self.last_stop_reason = "silence"
+                    break
+                if decision is False and silent >= semantic_trailing_chunks:
+                    self.last_stop_reason = "semantic-silence-watchdog"
+                    break
+                if after_start >= record_chunks:
+                    self.last_stop_reason = "duration-limit"
                     break
         finally:
             if process.poll() is None:
@@ -330,7 +378,24 @@ class AlsaVoiceActivatedRecorder:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
+        self.last_duration = len(captured) * self.chunk_duration
+        self.last_trailing_silence = silent * self.chunk_duration
         return _write_mono_pcm16_chunks(output, sample_rate, captured)
+
+    def record_streaming(
+        self,
+        output: Path,
+        *,
+        duration: float,
+        sample_rate: int,
+        on_chunk: Callable[[bytes], None],
+        should_stop: Callable[[], bool | None] | None = None,
+        on_ready: Callable[[], None] | None = None,
+    ) -> Path:
+        return self.record(
+            output, duration=duration, sample_rate=sample_rate, on_chunk=on_chunk,
+            should_stop=should_stop, on_ready=on_ready,
+        )
 
 
 class AlsaAudioPlayer:
@@ -338,15 +403,80 @@ class AlsaAudioPlayer:
         self,
         device: str = "default",
         runner: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+        process_factory: Callable[..., Any] = subprocess.Popen,
     ) -> None:
         self.device = device
         self._runner = runner
+        self._process_factory = process_factory
 
     def play(self, source: Path) -> None:
         self._runner(
             ["aplay", "-D", self.device, str(source.expanduser())],
             check=True,
         )
+
+    def play_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        on_first_chunk: Callable[[], None] | None = None,
+    ) -> None:
+        self._play_stream(chunks, on_first_chunk=on_first_chunk)
+
+    def play_pcm16_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        sample_rate: int = 24000,
+        on_first_chunk: Callable[[], None] | None = None,
+        on_interrupt: Callable[[], None] | None = None,
+    ) -> None:
+        if sample_rate <= 0:
+            raise ValueError("PCM sample rate must be positive.")
+        self._play_stream(
+            chunks,
+            on_first_chunk=on_first_chunk,
+            format_args=("-t", "raw", "-f", "S16_LE", "-c", "1", "-r", str(sample_rate)),
+        )
+
+    def _play_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        on_first_chunk: Callable[[], None] | None = None,
+        format_args: Sequence[str] = (),
+    ) -> None:
+        playback = self._process_factory(
+            ["aplay", "-D", self.device, *format_args, "-"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        wrote_audio = False
+        try:
+            if playback.stdin is None:
+                raise RuntimeError("aplay did not provide an audio input stream")
+            for chunk in chunks:
+                if not chunk:
+                    continue
+                if not wrote_audio:
+                    wrote_audio = True
+                    if on_first_chunk is not None:
+                        on_first_chunk()
+                playback.stdin.write(chunk)
+            playback.stdin.close()
+            playback.wait()
+            if not wrote_audio:
+                raise RuntimeError("speech stream did not contain audio")
+        except BaseException:
+            if playback.poll() is None:
+                playback.terminate()
+                playback.wait()
+            raise
+        finally:
+            close_stream = getattr(chunks, "close", None)
+            if callable(close_stream):
+                close_stream()
 
 
 class InterruptibleAlsaAudioPlayer:
@@ -418,12 +548,7 @@ class InterruptibleAlsaAudioPlayer:
         self.last_stop_requested = False
         return requested
 
-    def play(self, source: Path) -> None:
-        playback = self._process_factory(
-            ["aplay", "-D", self.device, str(source.expanduser())],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    def _monitor_playback(self, playback: Any) -> None:
         capture = self._process_factory(
             [
                 "arecord", "--quiet", "-D", self.capture_device, "-c", "1",
@@ -478,3 +603,97 @@ class InterruptibleAlsaAudioPlayer:
                 except subprocess.TimeoutExpired:
                     capture.kill()
                     capture.wait()
+
+    def play(self, source: Path) -> None:
+        playback = self._process_factory(
+            ["aplay", "-D", self.device, str(source.expanduser())],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self._monitor_playback(playback)
+
+    def play_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        on_first_chunk: Callable[[], None] | None = None,
+    ) -> None:
+        self._play_stream(chunks, on_first_chunk=on_first_chunk)
+
+    def play_pcm16_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        sample_rate: int = 24000,
+        on_first_chunk: Callable[[], None] | None = None,
+        on_interrupt: Callable[[], None] | None = None,
+    ) -> None:
+        if sample_rate <= 0:
+            raise ValueError("PCM sample rate must be positive.")
+        self._play_stream(
+            chunks,
+            on_first_chunk=on_first_chunk,
+            on_interrupt=on_interrupt,
+            format_args=("-t", "raw", "-f", "S16_LE", "-c", "1", "-r", str(sample_rate)),
+        )
+
+    def _play_stream(
+        self,
+        chunks: Iterable[bytes],
+        *,
+        on_first_chunk: Callable[[], None] | None = None,
+        format_args: Sequence[str] = (),
+        on_interrupt: Callable[[], None] | None = None,
+    ) -> None:
+        playback = self._process_factory(
+            ["aplay", "-D", self.device, *format_args, "-"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        errors: list[BaseException] = []
+
+        def feed_audio() -> None:
+            wrote_audio = False
+            try:
+                if playback.stdin is None:
+                    raise RuntimeError("aplay did not provide an audio input stream")
+                for chunk in chunks:
+                    if playback.poll() is not None:
+                        break
+                    if not chunk:
+                        continue
+                    if not wrote_audio:
+                        wrote_audio = True
+                        if on_first_chunk is not None:
+                            on_first_chunk()
+                    playback.stdin.write(chunk)
+                if playback.stdin is not None and not playback.stdin.closed:
+                    playback.stdin.close()
+                if not wrote_audio and playback.poll() is None:
+                    raise RuntimeError("speech stream did not contain audio")
+            except BrokenPipeError:
+                if playback.poll() is None:
+                    errors.append(RuntimeError("aplay closed the audio stream"))
+            except BaseException as exc:
+                errors.append(exc)
+                if playback.poll() is None:
+                    playback.terminate()
+            finally:
+                close_stream = getattr(chunks, "close", None)
+                if callable(close_stream):
+                    close_stream()
+
+        feeder = Thread(target=feed_audio, name="buddy-speech-stream", daemon=True)
+        feeder.start()
+        try:
+            self._monitor_playback(playback)
+        finally:
+            if playback.poll() is None:
+                playback.terminate()
+                playback.wait()
+            if self.last_interrupted and on_interrupt is not None:
+                on_interrupt()
+            feeder.join(timeout=2)
+        if errors and not self.last_interrupted:
+            raise errors[0]

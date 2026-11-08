@@ -3,9 +3,11 @@ from __future__ import annotations
 from array import array
 import json
 import subprocess
+from threading import Event
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import wave
 
 from robot.audio import (
     AlsaAudioPlayer,
@@ -76,6 +78,33 @@ class AudioTest(unittest.TestCase):
 
         def kill(self) -> None:
             self.running = False
+
+    class FakeStdin:
+        def __init__(self) -> None:
+            self.data = bytearray()
+            self.closed = False
+
+        def write(self, chunk: bytes) -> int:
+            self.data.extend(chunk)
+            return len(chunk)
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeStreamingProcess:
+        def __init__(self) -> None:
+            self.stdin = AudioTest.FakeStdin()
+            self.running = True
+
+        def poll(self) -> int | None:
+            return None if self.running else 0
+
+        def terminate(self) -> None:
+            self.running = False
+
+        def wait(self, timeout: float | None = None) -> int:
+            self.running = False
+            return 0
 
     @staticmethod
     def pcm_chunk(level: int, frames: int = 100) -> bytes:
@@ -155,6 +184,27 @@ class AudioTest(unittest.TestCase):
         self.assertIn("3", commands[0])
         self.assertEqual(commands[1], ["aplay", "-D", "hw:2,0", "output.wav"])
 
+    def test_alsa_player_writes_stream_to_aplay_stdin(self) -> None:
+        process = self.FakeStreamingProcess()
+        commands: list[list[str]] = []
+        first_chunks: list[str] = []
+
+        def factory(command: list[str], **kwargs: object) -> AudioTest.FakeStreamingProcess:
+            commands.append(command)
+            self.assertIs(kwargs["stdin"], subprocess.PIPE)
+            return process
+
+        player = AlsaAudioPlayer(device="hw:2,0", process_factory=factory)
+        player.play_stream(
+            iter((b"RIFF", b"audio")),
+            on_first_chunk=lambda: first_chunks.append("started"),
+        )
+
+        self.assertEqual(commands, [["aplay", "-D", "hw:2,0", "-"]])
+        self.assertEqual(process.stdin.data, b"RIFFaudio")
+        self.assertTrue(process.stdin.closed)
+        self.assertEqual(first_chunks, ["started"])
+
     def test_interruptible_player_stops_after_sustained_voice(self) -> None:
         playback = self.FakeProcess([])
         capture = self.FakeProcess(
@@ -184,6 +234,107 @@ class AudioTest(unittest.TestCase):
         self.assertTrue(capture.terminated)
         self.assertEqual(commands[0][0], "aplay")
         self.assertEqual(commands[1][0], "arecord")
+
+    def test_raw_pcm_player_uses_explicit_format(self) -> None:
+        process = self.FakeStreamingProcess()
+        commands = []
+
+        def factory(command, **kwargs):
+            commands.append(command)
+            return process
+
+        AlsaAudioPlayer(process_factory=factory).play_pcm16_stream(iter((b"\x00\x01",)))
+        self.assertEqual(commands[0], ["aplay", "-D", "default", "-t", "raw",
+                                      "-f", "S16_LE", "-c", "1", "-r", "24000", "-"])
+        self.assertEqual(process.stdin.data, b"\x00\x01")
+
+    def test_interrupt_callback_unblocks_receiver_before_join(self) -> None:
+        first_write = Event()
+        cancelled = Event()
+        finished = Event()
+
+        class StreamingInput(AudioTest.FakeStdin):
+            def write(self, chunk):
+                first_write.set()
+                return super().write(chunk)
+
+        playback = self.FakeStreamingProcess()
+        playback.stdin = StreamingInput()
+        capture = self.FakeProcess([self.pcm_chunk(3000)] * 2)
+        original_read = capture.stdout.read
+
+        def read(size):
+            assert first_write.wait(1)
+            return original_read(size)
+
+        capture.stdout.read = read
+        processes = iter((playback, capture))
+        player = InterruptibleAlsaAudioPlayer(
+            sample_rate=1000, chunk_duration=0.1, ignore_duration=0,
+            confirm_chunks=2, process_factory=lambda *a, **k: next(processes),
+        )
+
+        def chunks():
+            try:
+                yield b"\x00\x01"
+                assert cancelled.wait(1), "receiver was not cancelled"
+                raise RuntimeError("cancelled receiver")
+            finally:
+                finished.set()
+
+        player.play_pcm16_stream(chunks(), on_interrupt=cancelled.set)
+        self.assertTrue(player.last_interrupted)
+        self.assertTrue(cancelled.is_set())
+        self.assertTrue(finished.is_set())
+
+    def test_interruptible_player_monitors_voice_while_streaming(self) -> None:
+        first_write = Event()
+
+        class StreamingInput(AudioTest.FakeStdin):
+            def write(self, chunk: bytes) -> int:
+                written = super().write(chunk)
+                first_write.set()
+                return written
+
+        class StreamingPlayback(AudioTest.FakeStreamingProcess):
+            def __init__(self) -> None:
+                super().__init__()
+                self.stdin = StreamingInput()
+                self.terminated = False
+
+            def terminate(self) -> None:
+                self.terminated = True
+                super().terminate()
+
+        class WaitingCapture(AudioTest.FakeProcess):
+            def __init__(self) -> None:
+                super().__init__([AudioTest.pcm_chunk(3000)] * 2)
+                original_read = self.stdout.read
+
+                def read(size: int) -> bytes:
+                    if not first_write.wait(timeout=1):
+                        raise AssertionError("playback stream did not start")
+                    return original_read(size)
+
+                self.stdout.read = read
+
+        playback = StreamingPlayback()
+        capture = WaitingCapture()
+        processes = iter((playback, capture))
+        player = InterruptibleAlsaAudioPlayer(
+            sample_rate=1000,
+            chunk_duration=0.1,
+            ignore_duration=0,
+            confirm_chunks=2,
+            process_factory=lambda *args, **kwargs: next(processes),
+        )
+
+        player.play_stream(iter((b"RIFF", b"audio")))
+
+        self.assertTrue(playback.terminated)
+        self.assertTrue(capture.terminated)
+        self.assertTrue(player.last_interrupted)
+        self.assertTrue(first_write.is_set())
 
     def test_interruptible_player_detects_local_stop_word_once(self) -> None:
         playback = self.FakeProcess([])
@@ -268,6 +419,116 @@ class AudioTest(unittest.TestCase):
             recorder.record(Path("unused.wav"), duration=1, sample_rate=1000)
 
         self.assertTrue(process.terminated)
+
+    def test_capture_ready_is_notified_once_before_speech_upload(self) -> None:
+        process = self.FakeProcess([self.pcm_chunk(0), self.pcm_chunk(1200),
+                                    self.pcm_chunk(0), self.pcm_chunk(0)])
+        recorder = AlsaVoiceActivatedRecorder(
+            silence_duration=0.2, chunk_duration=0.1,
+            process_factory=lambda *a, **k: process,
+        )
+        events = []
+        with TemporaryDirectory() as directory:
+            recorder.record_streaming(
+                Path(directory) / "audio.wav", duration=2, sample_rate=1000,
+                on_ready=lambda: events.append("ready"),
+                on_chunk=lambda _: events.append("upload"),
+            )
+        self.assertEqual(events.count("ready"), 1)
+        self.assertEqual(events[0], "ready")
+        self.assertIn("upload", events)
+        self.assertTrue(process.terminated)
+
+    def test_failed_capture_does_not_announce_ready(self) -> None:
+        process = self.FakeProcess([])
+        recorder = AlsaVoiceActivatedRecorder(process_factory=lambda *a, **k: process)
+        events = []
+        with self.assertRaises(RuntimeError):
+            recorder.record(Path("unused.wav"), duration=1, sample_rate=1000,
+                            on_ready=lambda: events.append("ready"))
+        self.assertEqual(events, [])
+        self.assertTrue(process.terminated)
+
+    def test_streamed_capture_matches_wav_without_waiting_silence(self) -> None:
+        chunks = [self.pcm_chunk(0)] * 4 + [self.pcm_chunk(1200)] + [self.pcm_chunk(0)] * 2
+        process = self.FakeProcess(chunks)
+        recorder = AlsaVoiceActivatedRecorder(
+            threshold=500, max_wait=1, pre_roll=0.2, silence_duration=0.2,
+            chunk_duration=0.1, process_factory=lambda *a, **k: process,
+        )
+        sent = []
+        with TemporaryDirectory() as directory:
+            output = recorder.record_streaming(
+                Path(directory) / "audio.wav", duration=2, sample_rate=1000,
+                on_chunk=sent.append,
+            )
+            with wave.open(str(output), "rb") as audio:
+                self.assertEqual(b"".join(sent), audio.readframes(audio.getnframes()))
+        self.assertEqual(sent, chunks[3:])
+
+    def test_semantic_capture_keeps_pause_then_resumed_speech(self) -> None:
+        chunks = [self.pcm_chunk(1200)] + [self.pcm_chunk(0)] * 12 + [self.pcm_chunk(1300)] + [self.pcm_chunk(0)] * 2
+        process = self.FakeProcess(chunks)
+        recorder = AlsaVoiceActivatedRecorder(
+            threshold=500, silence_duration=0.4, chunk_duration=0.1,
+            process_factory=lambda *a, **k: process,
+        )
+        sent = []
+        with TemporaryDirectory() as directory:
+            output = recorder.record_streaming(
+                Path(directory) / "audio.wav", duration=20, sample_rate=1000,
+                on_chunk=sent.append, should_stop=lambda: not process.stdout.chunks,
+            )
+            self.assertEqual(inspect_wav(output).frames, 1600)
+        self.assertEqual(sent, chunks)
+        self.assertEqual(recorder.last_stop_reason, "semantic")
+
+    def test_semantic_capture_still_has_hard_duration_limit(self) -> None:
+        process = self.FakeProcess([self.pcm_chunk(1200)] + [self.pcm_chunk(0)] * 20)
+        recorder = AlsaVoiceActivatedRecorder(
+            threshold=500, silence_duration=0.4, chunk_duration=0.1,
+            process_factory=lambda *a, **k: process,
+        )
+        with TemporaryDirectory() as directory:
+            recorder.record_streaming(
+                Path(directory) / "audio.wav", duration=1.5, sample_rate=1000,
+                on_chunk=lambda chunk: None, should_stop=lambda: False,
+            )
+        self.assertEqual(recorder.last_stop_reason, "duration-limit")
+        self.assertAlmostEqual(recorder.last_duration, 1.5)
+
+    def test_semantic_watchdog_ends_stalled_detector_after_three_seconds_quiet(self) -> None:
+        process = self.FakeProcess([self.pcm_chunk(1200)] + [self.pcm_chunk(0)] * 40)
+        recorder = AlsaVoiceActivatedRecorder(
+            silence_duration=0.4, semantic_silence_duration=3.0, chunk_duration=0.1,
+            process_factory=lambda *a, **k: process,
+        )
+        with TemporaryDirectory() as directory:
+            recorder.record_streaming(
+                Path(directory) / "audio.wav", duration=20, sample_rate=1000,
+                on_chunk=lambda _: None, should_stop=lambda: False,
+            )
+        self.assertEqual(recorder.last_stop_reason, "semantic-silence-watchdog")
+        self.assertAlmostEqual(recorder.last_duration, 3.1)
+        self.assertAlmostEqual(recorder.last_trailing_silence, 3.0)
+        self.assertTrue(process.terminated)
+
+    def test_resumed_speech_resets_semantic_watchdog(self) -> None:
+        chunks = ([self.pcm_chunk(1200)] + [self.pcm_chunk(0)] * 25
+                  + [self.pcm_chunk(1300)] + [self.pcm_chunk(0)] * 30)
+        process = self.FakeProcess(chunks)
+        recorder = AlsaVoiceActivatedRecorder(
+            silence_duration=0.4, semantic_silence_duration=3.0, chunk_duration=0.1,
+            process_factory=lambda *a, **k: process,
+        )
+        sent = []
+        with TemporaryDirectory() as directory:
+            recorder.record_streaming(
+                Path(directory) / "audio.wav", duration=20, sample_rate=1000,
+                on_chunk=sent.append, should_stop=lambda: False,
+            )
+        self.assertEqual(sent, chunks)
+        self.assertEqual(recorder.last_stop_reason, "semantic-silence-watchdog")
 
 
 if __name__ == "__main__":

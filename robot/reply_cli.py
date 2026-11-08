@@ -5,6 +5,7 @@ import argparse
 from robot.conversation import (
     DEFAULT_MEMORY_TURNS,
     DEFAULT_REPLY_MODEL,
+    DEFAULT_REPLY_REASONING_EFFORT,
     MockReplyGenerator,
     OpenAIReplyGenerator,
     ReplyGenerator,
@@ -17,6 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("text")
     parser.add_argument("--backend", choices=("mock", "openai"), default="mock")
     parser.add_argument("--model", default=DEFAULT_REPLY_MODEL)
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("none", "low", "medium", "high", "xhigh", "max"),
+        default=DEFAULT_REPLY_REASONING_EFFORT,
+    )
     parser.add_argument("--mock-reply", default="こんにちは！今日は何をして遊ぶ？")
     parser.add_argument(
         "--child-mode",
@@ -34,6 +40,7 @@ def create_reply_generator(
     remember_context: bool = False,
     max_context_turns: int = DEFAULT_MEMORY_TURNS,
     child_mode: bool = False,
+    reasoning_effort: str = DEFAULT_REPLY_REASONING_EFFORT,
 ) -> ReplyGenerator:
     if backend == "mock":
         return MockReplyGenerator(mock_reply)
@@ -42,6 +49,7 @@ def create_reply_generator(
         instructions=get_reply_instructions(child_mode),
         remember_context=remember_context,
         max_context_turns=max_context_turns,
+        reasoning_effort=reasoning_effort,
     )
 
 
@@ -52,6 +60,7 @@ def main() -> int:
         model=args.model,
         mock_reply=args.mock_reply,
         child_mode=args.child_mode,
+        reasoning_effort=args.reasoning_effort,
     )
     print(f"reply={generator.reply(args.text)}")
     return 0

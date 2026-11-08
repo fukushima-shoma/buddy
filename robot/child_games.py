@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import unicodedata
+from robot.reply_policy import choose_reply_policy
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,10 @@ class ChildGameController:
         return self._mode is not None
 
     def handle(self, text: str) -> str | None:
+        if choose_reply_policy(text).mode == "story":
+            self._mode = None
+            self._index = 0
+            return None
         normalized = normalize_game_text(text)
         start = START_COMMANDS.get(normalized)
         if start is not None:

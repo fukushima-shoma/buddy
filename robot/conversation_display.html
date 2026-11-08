@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f1ed">
+<title>Buddyのおはなし</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #f2f1ed; color: #15332c; font-family: system-ui, sans-serif; text-align: center; transition: background .15s; }
+body[data-phase="listening"] { background: #bceccc; }
+body[data-phase="thinking"] { background: #ffe3a0; }
+body[data-phase="speaking"] { background: #bbdfff; }
+main { min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) 20px; }
+.brand { font-weight: 800; font-size: 22px; letter-spacing: .1em; }
+.car { width: min(65vw, 310px); margin: 26px 0; }
+h1 { font-size: clamp(32px, 7vw, 68px); line-height: 1.35; margin: 0 0 20px; }
+p { font-size: clamp(18px, 4vw, 26px); margin: 0; line-height: 1.7; }
+button { margin-top: 32px; padding: 12px 20px; border-radius: 24px; border: 2px solid #15332c; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.note { max-width: 26em; font-size: 14px; margin-top: 20px; }
+.heard { width: min(100%, 600px); margin-top: 24px; padding: 16px 20px; background: #ffffffb3; border-radius: 20px; }
+.heard h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+.heard p { white-space: pre-wrap; overflow-wrap: anywhere; text-align: left; }
+</style>
+<body data-phase="offline">
+<main>
+  <div class="brand">BUDDY</div>
+  <svg class="car" viewBox="0 0 300 170" aria-hidden="true">
+    <path d="M45 100 68 45Q73 32 90 32H206Q224 32 230 46L253 100" fill="#fff" stroke="#15332c" stroke-width="7"/>
+    <rect x="28" y="85" width="245" height="61" rx="26" fill="#fff" stroke="#15332c" stroke-width="7"/>
+    <rect x="50" y="139" width="30" height="24" rx="9" fill="#15332c"/>
+    <rect x="222" y="139" width="30" height="24" rx="9" fill="#15332c"/>
+    <circle cx="92" cy="78" r="9" fill="#15332c"/>
+    <circle cx="207" cy="78" r="9" fill="#15332c"/>
+    <path d="M122 109Q150 134 178 109" fill="none" stroke="#15332c" stroke-width="7" stroke-linecap="round"/>
+  </svg>
+  <div role="status" aria-live="polite" aria-atomic="true">
+    <h1 id="label">つないでいるよ</h1>
+    <p id="hint">ちょっと待ってね</p>
+  </div>
+  <section class="heard" id="heard" hidden aria-live="polite" aria-atomic="true">
+    <h2>Buddyが聞き取った言葉</h2>
+    <p id="transcript"></p>
+  </section>
+  <button id="keep-awake" type="button">画面をつけたままにする</button>
+  <p class="note" id="screen-note"></p>
+</main>
+<script>
+const states = {
+  waiting: ['「バディ」と呼んでね', 'お話の準備ができているよ'],
+  listening: ['話していいよ', 'ぼく、聞いているよ'],
+  thinking: ['ちょっと待ってね', 'いまは、ぼくの返事を待ってね'],
+  speaking: ['ぼくがお話し中', '話していいよ、になったら教えてね'],
+  stopped: ['お話はおしまい', 'またお話ししようね'],
+  offline: ['Buddyにつながらないよ', '同じWi-Fiにつないで待ってね']
+};
+let shown = '';
+function show(phase) {
+  if (!states[phase]) phase = 'offline';
+  if (['offline', 'waiting', 'stopped', 'listening'].includes(phase)) showTranscript(null);
+  if (phase === shown) return;
+  shown = phase;
+  document.body.dataset.phase = phase;
+  document.getElementById('label').textContent = states[phase][0];
+  document.getElementById('hint').textContent = states[phase][1];
+}
+function showTranscript(text) {
+  const transcript = typeof text === 'string' ? text : '';
+  const field = document.getElementById('transcript');
+  if (field.textContent !== transcript) field.textContent = transcript;
+  document.getElementById('heard').hidden = !transcript;
+}
+async function poll() {
+  try {
+    const response = await fetch('/api/state', {cache: 'no-store', signal: AbortSignal.timeout(1500)});
+    if (!response.ok) throw new Error('disconnected');
+    const state = await response.json();
+    show(state.phase);
+    if (['thinking', 'speaking'].includes(state.phase)) showTranscript(state.transcript);
+  } catch (_) { show('offline'); }
+  setTimeout(poll, document.hidden ? 1000 : 200);
+}
+// Never leave a cached green "話していいよ" screen after switching apps.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) show('offline'); });
+window.addEventListener('offline', () => show('offline'));
+poll();
+let wakeLock;
+let keepAwake = false;
+const awakeButton = document.getElementById('keep-awake');
+const screenNote = document.getElementById('screen-note');
+async function requestWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    screenNote.textContent = '画面をつけたままにしているよ';
+    wakeLock.addEventListener('release', () => { screenNote.textContent = '画面の自動ロックが有効になっているよ'; });
+  } catch (_) {
+    screenNote.textContent = 'このブラウザでは使えません。スマホの設定で自動ロックを延ばしてね。';
+  }
+}
+awakeButton.addEventListener('click', () => { keepAwake = true; requestWakeLock(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && keepAwake) requestWakeLock(); });
+</script>
+</body>
+</html>

@@ -10,6 +10,7 @@ setup(
     name=PACKAGE_NAME,
     version="0.1.0",
     packages=find_packages(exclude=("tests",)),
+    package_data={"robot": ["conversation_display.html"]},
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{PACKAGE_NAME}"]),
         (f"share/{PACKAGE_NAME}", ["package.xml"]),

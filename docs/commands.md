@@ -119,8 +119,9 @@ python -m robot.speech_cli \
   --device plughw:2,0
 ```
 
-声は`coral`、話し方は`calm`が既定。若々しく優しい声色と、少しゆっくりした
-自然な抑揚を使う。`--style buddy`と明るい`--style cheerful`も選択できる。
+声は`coral`、話し方は`calm`、速度は`0.95`が既定。幼さのある中性的な声色と、
+少し年上の子どもの友だちのような安心できる話し方を目指す。`--style buddy`と
+明るい`--style cheerful`も選択できる。
 連続会話と`transcribe_cli`では同じ設定を`--speech-style`で指定する。以前の声へ
 戻す場合は`--voice marin`または`--speech-voice marin`を指定する。
 
@@ -152,6 +153,7 @@ python -m robot.conversation_loop_cli \
   --reply-backend openai \
   --memory session \
   --memory-turns 30 \
+  --local-short-replies \
   --speech-backend openai \
   --speech-style calm \
   --playback-backend alsa-interruptible \
@@ -168,6 +170,9 @@ python -m robot.conversation_loop_cli \
 Buddyがお別れを返して、その会話セッションを指定ターン数より前に終了する。
 「もう一回言って」「なんて言った？」と話すと、直前のBuddyの音声をそのまま
 再生する。この再生では返答APIと音声合成APIを追加で呼び出さない。
+`--local-short-replies`は、「こんにちは」「ありがとう」「ちがう」「わからない」「できた」
+などの短い完全一致発話を端末内で判定し、返答APIを呼ばず応答する。同じ意図でも
+複数の返答を循環させる。「はい」「うん」は会話の文脈によって意味が変わるため対象外。
 会話の口調は「やさしい友だち」を軸にし、失敗を責めず、知らないことは素直に伝える。
 
 好きな色などの固定プロフィールはローカル記憶で管理する。
@@ -175,6 +180,7 @@ Buddyがお別れを返して、その会話セッションを指定ターン数
 ```sh
 python -m robot.memory_cli set 好きな色 青
 python -m robot.memory_cli set 好きな動物 ぞう
+python -m robot.memory_cli set 誕生日 4月3日
 python -m robot.memory_cli list
 python -m robot.memory_cli delete 好きな色
 ```
@@ -186,20 +192,32 @@ python -m robot.memory_cli clear --yes
 ```
 
 記憶は`data/buddy-memory.json`だけに保存され、Gitの対象外になる。会話中は
-「好きな色は青」「好きな色は何？」「好きな色を忘れて」のように話せる。
-自動保存は色・動物・食べ物のみで、保存・参照・削除と返答は端末内で処理する。
+「好きな色は青」「好きな色は何？」「好きな色を忘れて」のほか、
+「誕生日は4月3日」「誕生日はいつ？」「誕生日を忘れて」のように話せる。
+自動保存は色・動物・食べ物と誕生日の月日だけに限定し、生年や年齢は保存しない。
+存在しない日付は拒否する。保存・参照・削除と返答は端末内で処理する。
 保存したプロフィールをOpenAI APIのプロンプトへは渡さない。
 
-会話そのものを次回の会話でも覚えさせる場合は、会話コマンドへ次を追加する。
+過去の話題を次セッション以降で参照させる場合は、会話コマンドへ次を追加する。
 
 ```sh
---auto-conversation-memory
+--memory persistent
 ```
 
-文字起こしとBuddyの返答を`data/conversation-memory.json`へ自動保存する。音声は会話
-記憶へ複製しない。最大100往復だけを残し、保存履歴は次の会話でOpenAI APIへ
-再送しない。メールアドレスと電話番号は保存前に自動で置換される。ただし、氏名や
-住所などを完全に自動判別するものではないため、保護者が定期的に内容を確認する。
+通常会話の文字起こしとBuddyの返答、日時、抜粋要約、検索索引を
+`data/conversation-memory.sqlite3`へ保存する。旧JSONは初回利用時に照合して移行する。
+移行前に旧プロセスを終了する。削除するまで保持し、100往復を超えても
+自動削除しない。直前セッションの末尾は自動復元せず、各発話に関係する過去の
+最大4往復だけを日時付きでOpenAI APIへ送る。現在のセッションは検索から除外する。
+「ロケット号で遊ぼう」のように過去参照を明示しなくても検索し、該当しなければ送らない。
+「昨日」「一昨日」「先週」「9月14日」「2026-09-14」も検索条件になる。
+日付は日本時間、先週は月曜〜日曜、年省略時は今年として扱う。
+
+音声は会話記憶へ複製しない。メールアドレスと電話番号は保存前に置換するが、
+氏名や住所などは完全には判別できないため保護者が内容を確認する。
+ファイルはGit対象外、権限0600。索引のハッシュは匿名化・暗号化ではない。
+詳細と検索の制限は[会話索引](conversation-memory.md)を参照。
+`--auto-conversation-memory`だけなら端末内への保存のみで、過去履歴をAPIへ再送しない。
 
 ```sh
 python -m robot.conversation_memory_cli list --limit 20
@@ -207,8 +225,43 @@ python -m robot.conversation_memory_cli delete-session SESSION_ID
 python -m robot.conversation_memory_cli clear --yes
 ```
 
+直近セッションの計測・確認箇所をレポートにする場合:
+
+```bash
+.venv/bin/python -m robot.session_evaluation_cli
+```
+
+終了済みの直近だけなら`--completed`、本文と評価観点を使う内容レビュー用の出力は
+`--review-context`を指定する。詳細は[セッション評価](session-evaluation.md)。
+
 `list`に表示された`session=`の値を`delete-session`へ渡すと、その会話だけを削除できる。
 記憶ファイルはGit対象外だが、ラズパイを譲渡・廃棄するときは`clear --yes`で消去する。
+
+共有体験を会話セッションの終了後も残す場合は、次を会話コマンドへ追加する。
+
+```sh
+--shared-experience-memory
+```
+
+会話中に「赤い車をロケット号と名付けたことを覚えて」のように明示すると、短い要約を
+`data/shared-experiences.json`へ保存する。「何を覚えてる？」で直近3件を確認でき、
+「赤い車をロケット号と名付けたことを忘れて」で一致する記憶を削除できる。
+有効期限はなく、削除するまで保持する。会話全文と音声はこのファイルへ保存しない。
+最大500件まで保存し、上限へ達した場合も古い記憶を自動削除しない。
+
+保護者は次のコマンドで追加、確認、個別削除、全削除を行える。
+
+```sh
+python -m robot.shared_experience_cli add "赤い車をロケット号と名付けた"
+python -m robot.shared_experience_cli list
+python -m robot.shared_experience_cli delete EXPERIENCE_ID
+python -m robot.shared_experience_cli clear --yes
+```
+
+保存時にメールアドレス、電話番号、学校や住所を示す語を検出した場合は拒否するが、
+すべての個人情報を完全には判定できない。保護者が`list`で定期的に確認する。
+通常の返答時には、現在の発話に関係する最大8件の要約をOpenAI APIへ参考情報として送る。
+共有体験をAPIへ送信したくない場合は、この機能を有効にしない。
 
 3歳半向けの短い返答、1つの質問、二択、聞き取り失敗時の音声再質問を有効にする。
 保護者同席で、最初は有限ターンかつ履歴なしで試す。
@@ -337,7 +390,7 @@ python -m robot.conversation_loop_cli \
 会話中に「バイバイ」と話した場合も、お別れ音声の後で呼びかけ待ちへ戻る。
 待機中は「ねえ、バディ」と一致する呼びかけだけを受け付け、それ以外の会話や
 「バイバイ」には返答せず、録音ファイルへの保存やOpenAI APIへの送信も行わない。
-10秒間の無音が2回続いた場合も、「お話はおしまいかな。またお話ししようね。」と
+10秒間の無音が2回続いた場合も、「お話はおしまいかな。ぼくもタイヤを休めるね。」と
 話して待機へ戻る。無効化する場合は`--max-silence-turns 0`を指定する。
 Buddyの返答中に大きめの声が2回連続で検出されると再生を止め、次の録音へ進む。
 人物追従中の「止まって」「ストップ」はVoskでローカル認識するため、返答中でも

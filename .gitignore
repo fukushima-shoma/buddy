@@ -4,6 +4,9 @@ models/person_detection/
 models/wakeword/
 data/buddy-memory.json
 data/conversation-memory.json
+data/*.sqlite3
+data/*.sqlite3-*
+data/shared-experiences.json
 .env
 .env.*
 !.env.example

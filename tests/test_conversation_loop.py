@@ -3,8 +3,10 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from robot.audio import MockAudioPlayer, MockAudioRecorder, NoSpeechDetectedError
+from robot.buddy_identity import BUDDY_PROACTIVE_INVITATION
 from robot.child_games import ChildGameController
 from robot.conversation import MockReplyGenerator
+from robot.conversation_intents import LocalShortReplyController
 from robot.conversation_loop_cli import (
     CHILD_RETRY_REPLIES,
     DEFAULT_RETRY_REPLIES,
@@ -20,6 +22,7 @@ from robot.conversation_loop_cli import (
     MOBILITY_FAREWELL_REPLY,
     POWER_GOOD_REPLY,
     POWER_LOW_REPLY,
+    PROACTIVE_INVITATION,
     NOTHING_TO_REPEAT_REPLY,
     build_parser,
     is_farewell_transcript,
@@ -110,10 +113,16 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertFalse(args.auto_conversation_memory)
         self.assertEqual(
             args.conversation_memory_file,
-            Path("data/conversation-memory.json"),
+            Path("data/conversation-memory.sqlite3"),
+        )
+        self.assertFalse(args.shared_experience_memory)
+        self.assertEqual(
+            args.shared_experience_memory_file,
+            Path("data/shared-experiences.json"),
         )
         self.assertEqual(args.speech_backend, "mock")
         self.assertEqual(args.speech_style, "calm")
+        self.assertEqual(args.speech_speed, 0.95)
         self.assertEqual(args.playback_backend, "mock")
         self.assertEqual(args.start_trigger, "immediate")
         self.assertEqual(args.button_pin, 17)
@@ -125,11 +134,19 @@ class ConversationLoopTest(unittest.TestCase):
         self.assertEqual(args.proactive_interval, 0.0)
         self.assertEqual(args.proactive_start_hour, 8)
         self.assertEqual(args.proactive_end_hour, 20)
+        self.assertEqual(PROACTIVE_INVITATION, BUDDY_PROACTIVE_INVITATION)
+        self.assertIn("タイヤ", PROACTIVE_INVITATION)
         self.assertEqual(args.orientation_backend, "off")
         self.assertEqual(args.mobility_backend, "off")
         self.assertEqual(args.conversation_events, "off")
         self.assertEqual(args.power_monitor, "off")
         self.assertFalse(args.child_games)
+        self.assertFalse(args.local_short_replies)
+
+    def test_persistent_memory_mode_is_available(self) -> None:
+        args = build_parser().parse_args(["--memory", "persistent"])
+
+        self.assertEqual(args.memory, "persistent")
 
     def test_ros2_follow_mobility_backend_is_available(self) -> None:
         args = build_parser().parse_args(
@@ -161,6 +178,7 @@ class ConversationLoopTest(unittest.TestCase):
                 pause=0.25,
                 output=logs.append,
                 sleeper=pauses.append,
+                clock=lambda: 10.0,
             )
 
             self.assertEqual(completed, 2)
@@ -169,6 +187,110 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(len(player.played), 2)
             self.assertEqual(pauses, [0.25])
             self.assertIn("turn=2 reply=返事", logs)
+            for stage in (
+                "transcription",
+                "reply",
+            ):
+                self.assertIn(f"turn=2 timing={stage} seconds=0.000", logs)
+            self.assertIn("turn=2 timing=recording-to-playback seconds=0.000 path=pipeline", logs)
+            self.assertIn(
+                "turn=2 timing=synthesis seconds=0.000 cached=false", logs
+            )
+
+    def test_model_reply_streams_to_supported_player(self) -> None:
+        class StreamingSynthesizer(MockSpeechSynthesizer):
+            last_cache_hit = False
+
+            def stream(self, text: str, output: Path):
+                generated = self.synthesize(text, output)
+                yield generated.read_bytes()
+
+        class StreamingPlayer(MockAudioPlayer):
+            def __init__(self) -> None:
+                super().__init__()
+                self.streamed = bytearray()
+
+            def play_stream(self, chunks, *, on_first_chunk=None) -> None:
+                for chunk in chunks:
+                    if not self.streamed and on_first_chunk is not None:
+                        on_first_chunk()
+                    self.streamed.extend(chunk)
+
+        with TemporaryDirectory() as directory:
+            logs: list[str] = []
+            synthesizer = StreamingSynthesizer()
+            player = StreamingPlayer()
+
+            completed = run_conversation_loop(
+                recorder=MockAudioRecorder(),
+                transcriber=MockTranscriber("質問"),
+                reply_generator=MockReplyGenerator("返事"),
+                synthesizer=synthesizer,
+                player=player,
+                input_path=Path(directory) / "input.wav",
+                speech_output=Path(directory) / "reply.wav",
+                duration=0.1,
+                sample_rate=16000,
+                language="ja",
+                turns=1,
+                pause=0,
+                output=logs.append,
+                clock=lambda: 10.0,
+            )
+
+        self.assertEqual(completed, 1)
+        self.assertGreater(len(player.streamed), 0)
+        self.assertIn(
+            "turn=1 timing=synthesis-first-audio seconds=0.000 cached=false",
+            logs,
+        )
+        self.assertIn(
+            "turn=1 timing=recording-to-playback seconds=0.000 streaming=true path=pipeline",
+            logs,
+        )
+        self.assertTrue(
+            any(
+                log.startswith("turn=1 synthesized=")
+                and log.endswith(" streaming=true")
+                for log in logs
+            )
+        )
+
+    def test_local_short_reply_bypasses_reply_api_and_saves_exchange(self) -> None:
+        logs: list[str] = []
+        exchanges: list[tuple[str, str]] = []
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+        controller = LocalShortReplyController()
+
+        completed = run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("ありがとう"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            handle_local_short_reply=controller.reply,
+            on_exchange=lambda user, assistant: exchanges.append(
+                (user, assistant)
+            ),
+            output=logs.append,
+        )
+
+        self.assertEqual(completed, 1)
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(synthesizer.inputs, [exchanges[0][1]])
+        self.assertEqual(exchanges[0][0], "ありがとう")
+        self.assertIn("turn=1 timing=reply seconds=0.000 local=true", logs)
+        self.assertTrue(
+            any("reason=local-short-reply intent=thanks" in log for log in logs)
+        )
 
     def test_conversation_emits_transport_independent_state_events(self) -> None:
         events: list[ConversationEvent] = []
@@ -196,6 +318,7 @@ class ConversationLoopTest(unittest.TestCase):
                 (ConversationPhase.LISTENING, ConversationReaction.CALM),
                 (ConversationPhase.THINKING, ConversationReaction.CURIOUS),
                 (ConversationPhase.SPEAKING, ConversationReaction.WARM),
+                (ConversationPhase.THINKING, ConversationReaction.CURIOUS),
                 (ConversationPhase.STOPPED, ConversationReaction.CALM),
             ],
         )
@@ -311,6 +434,33 @@ class ConversationLoopTest(unittest.TestCase):
             events,
         )
 
+    def test_shared_experience_request_bypasses_reply_api(self) -> None:
+        reply_generator = MockReplyGenerator("呼ばれない")
+        synthesizer = MockSpeechSynthesizer()
+        exchanges: list[tuple[str, str]] = []
+
+        run_conversation_loop(
+            recorder=MockAudioRecorder(),
+            transcriber=MockTranscriber("ロケット号のことを覚えて"),
+            reply_generator=reply_generator,
+            synthesizer=synthesizer,
+            player=MockAudioPlayer(),
+            input_path=Path("input.wav"),
+            speech_output=Path("reply.wav"),
+            duration=0.1,
+            sample_rate=16000,
+            language="ja",
+            turns=1,
+            pause=0,
+            handle_shared_experience=lambda _: "ロケット号を覚えたよ。",
+            on_exchange=lambda user, assistant: exchanges.append((user, assistant)),
+            output=lambda _: None,
+        )
+
+        self.assertEqual(reply_generator.inputs, [])
+        self.assertEqual(synthesizer.inputs, ["ロケット号を覚えたよ。"])
+        self.assertEqual(exchanges, [])
+
     def test_empty_transcript_skips_reply_speech_and_playback(self) -> None:
         with TemporaryDirectory() as directory:
             logs: list[str] = []
@@ -396,7 +546,7 @@ class ConversationLoopTest(unittest.TestCase):
             self.assertEqual(synthesizer.inputs, [DEFAULT_FAREWELL_REPLY])
             self.assertEqual(len(player.played), 1)
             self.assertEqual(stops, ["stop"])
-            self.assertIn("reason=conversation-ended", logs[-3])
+            self.assertTrue(any("reason=conversation-ended" in log for log in logs))
 
     def test_spoken_start_command_requires_confirmation_before_following(self) -> None:
         starts: list[str] = []

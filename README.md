@@ -25,6 +25,15 @@ Phase5開始: URDFとTFを土台に自律走行へ進む
 
 詳細手順:
 
+- [子どもとの実会話からの改善項目](docs/conversation-improvements.md)
+- [自然な会話に向けたRealtime移行](docs/realtime-migration.md)
+- [スマホで会話状態を見る](docs/conversation-display.md)
+- [ログからセッションを評価する](docs/session-evaluation.md)
+- [セッションをまたぐ会話索引](docs/conversation-memory.md)
+- [会話の遅延と改善方針](docs/conversation-latency-analysis.md)
+- [固定音声キャッシュとTTSチャンク比較](docs/fixed-speech-cache.md)
+- [応答速度改善の取り込み・A/B検証計画](docs/voice-latency-adoption-plan.md)
+- [Buddyのキャラクター設定](docs/buddy-identity.md)
 - [Buddy コマンド説明書](docs/commands.md)
 - [docs/phase0.md](docs/phase0.md)
 - [docs/phase1.md](docs/phase1.md)

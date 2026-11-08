@@ -3,7 +3,8 @@
 ## Working style
 
 - Start by reading the relevant code, tests, and phase documentation.
-- For review or diagnosis requests, report findings before editing. For implementation requests, make the change and verify it without waiting for routine confirmations.
+- For review or diagnosis requests, report findings before editing.
+- For implementation requests, first inspect the relevant code and documentation, then present the proposed feature behavior and implementation policy to the user. Do not edit implementation files until the user explicitly approves that policy. After approval, make the change and verify it without waiting for routine confirmations.
 - Keep changes focused. Preserve unrelated user changes and inspect the final diff before finishing.
 - Explain assumptions when hardware, operating system, or deployment details cannot be verified locally.
 
